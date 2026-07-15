@@ -1,9 +1,8 @@
 /**
  * @file TcpServer.cpp
- * @brief Implementation de la connexion TCP/IP cote serveur.
+ * @brief Implementation de la classe TcpServer.
  */
 #include "TcpServer.h"
-#include "Protocol.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -28,11 +27,10 @@ bool TcpServer::init() {
         return false;
     }
 
-    // Permet de relancer le serveur sans attendre la liberation du port pour eviter l'erreur "Address already in use"
+    // Permet de relancer le serveur sans attendre la liberation du port
     const int opt = 1;
     setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // Association du socket a l'adresse locale et au port du protocole
     _serverAddr.sin_family = AF_INET;
     _serverAddr.sin_addr.s_addr = INADDR_ANY;
     _serverAddr.sin_port = htons(Protocol::PORT);
@@ -42,7 +40,6 @@ bool TcpServer::init() {
         return false;
     }
 
-    // Mise en ecoute des connexions entrantes
     if (listen(_listenFd, 1) < 0) {
         std::cerr << "Erreur listen() : " << std::strerror(errno) << std::endl;
         return false;
@@ -53,7 +50,6 @@ bool TcpServer::init() {
 }
 
 std::optional<int> TcpServer::acceptClient() const {
-    // Blocage jusqu'a ce qu'un client se connecte
     sockaddr_in clientAddr{};
     socklen_t clientLen = sizeof(clientAddr);
 
@@ -70,13 +66,30 @@ std::optional<int> TcpServer::acceptClient() const {
     return clientFd;
 }
 
+void TcpServer::handleClient(int clientFd) const {
+    // Reception d'un message d'un octet envoye par le client
+    uint8_t message = 0;
+    const auto received = recv(clientFd, &message, sizeof(message), 0);
+    if (received <= 0) {
+        std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
+        return;
+    }
+
+    // Traitement selon le code de message recu
+    if (static_cast<Protocol::MessageCode>(message) == Protocol::MessageCode::GetFrame) {
+        const auto response = static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
+        send(clientFd, &response, sizeof(response), 0);
+        std::cout << "GET_FRAME recu, FRAME_HDR envoye" << std::endl;
+    }
+}
+
 void TcpServer::run() {
     const auto clientFd = acceptClient();
     if (!clientFd) {
         return;
     }
 
-    // Connexion TCP/IP validee, on ferme
+    handleClient(clientFd.value());
     close(clientFd.value());
 }
 
