@@ -1,0 +1,12 @@
+PROJECT_NAME           = "ELE4205 - Programme client (poste de travail)"
+OUTPUT_DIRECTORY       = docs
+INPUT                  = .
+RECURSIVE              = NO
+EXCLUDE                = build
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+GENERATE_LATEX         = NO
+GENERATE_HTML          = YES
+OPTIMIZE_OUTPUT_FOR_C  = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES

@@ -1,0 +1,9 @@
+# Répertoire de compilation
+build/
+
+# Documentation générée par Doxygen
+docs/
+
+# Fichiers temporaires d'éditeurs
+*.swp
+.DS_Store
