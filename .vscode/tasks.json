@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Debug",
+            "type": "shell",
+            "command": "source /opt/poky/4.0.28/environment-setup-cortexa53-poky-linux && rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Debug && cd build && make",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Build Release",
+            "type": "shell",
+            "command": "source /opt/poky/4.0.28/environment-setup-cortexa53-poky-linux && rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release && cd build && make"
+        },
+        {
+            "label": "Deploy to Odroid and start gdbserver",
+            "isBackground": true,
+            "type": "shell",
+            "command": "sh",
+            "problemMatcher": {
+                "base": "$gcc",
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Deploying on Target",
+                    "endsPattern": "Starting gdbserver on Target"
+                }
+            },
+            "args": [
+                "odroid-deploy-gdbserver.sh"
+            ]
+        }
+    ]
+}
