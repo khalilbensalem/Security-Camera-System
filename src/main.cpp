@@ -20,19 +20,23 @@ int main() {
         return 1;
     }
 
-    // Validation de l'echange GET_FRAME / FRAME_HDR (etape 3)
-    const auto response = client.sendAndReceive(Protocol::MessageCode::GetFrame);
-    if (response && response.value() == Protocol::MessageCode::FrameHdr) {
-        std::cout << "FRAME_HDR recu" << std::endl;
-    }
-
-    // Fenetre OpenCV, vide pour l'instant (aucune image n'est encore transmise)
     cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
-    cv::Mat blankFrame = cv::Mat::zeros(600, 800, CV_8UC3);
+    const cv::Mat blankFrame = cv::Mat::zeros(600, 800, CV_8UC3);
     cv::imshow(WINDOW_NAME, blankFrame);
 
-    // Attend un appui sur une touche pour fermer (validation manuelle de la fenetre)
-    cv::waitKey(0);
+    // Boucle principale : un cycle GET_FRAME/FRAME_HDR toutes les 30 ms
+    bool running = true;
+    while (running) {
+        client.sendAndReceive(Protocol::MessageCode::GetFrame);
+
+        // waitKey sert de minuterie (30 ms) ET de lecture clavier
+        const int key = cv::waitKey(Protocol::CYCLE_INTERVAL_MS) & 0xFF;
+
+        if (key == 'q') {
+            client.sendAndReceive(Protocol::MessageCode::Stop);
+            running = false;
+        }
+    }
 
     client.close();
 
