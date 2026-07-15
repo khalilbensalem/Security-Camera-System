@@ -17,6 +17,12 @@ int main() {
         return 1;
     }
 
+    // Envoi de GET_FRAME et reception de la reponse du serveur
+    const auto response = client.sendAndReceive(Protocol::MessageCode::GetFrame);
+    if (response && response.value() == Protocol::MessageCode::FrameHdr) {
+        std::cout << "FRAME_HDR recu" << std::endl;
+    }
+
     client.close();
 
     return 0;

@@ -1,9 +1,8 @@
 /**
  * @file TcpClient.cpp
- * @brief Implementation de la connexion TCP/IP cote client.
+ * @brief Implementation de la classe TcpClient.
  */
 #include "TcpClient.h"
-#include "Protocol.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -19,14 +18,12 @@ TcpClient::~TcpClient() {
 }
 
 bool TcpClient::connectToServer(const std::string& serverIp) {
-    // Creation du socket TCP/IP
     _socketFd = socket(AF_INET, SOCK_STREAM, 0);
     if (_socketFd < 0) {
         std::cerr << "Erreur socket() : " << std::strerror(errno) << std::endl;
         return false;
     }
 
-    // Preparation de l'adresse du serveur (IP + port du protocole)
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(Protocol::PORT);
@@ -36,7 +33,6 @@ bool TcpClient::connectToServer(const std::string& serverIp) {
         return false;
     }
 
-    // Etablissement de la connexion TCP/IP avec le serveur
     if (connect(_socketFd, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0) {
         std::cerr << "Erreur connect() : " << std::strerror(errno) << std::endl;
         return false;
@@ -44,6 +40,24 @@ bool TcpClient::connectToServer(const std::string& serverIp) {
 
     std::cout << "Connecte au serveur " << serverIp << ":" << Protocol::PORT << std::endl;
     return true;
+}
+
+std::optional<Protocol::MessageCode> TcpClient::sendAndReceive(Protocol::MessageCode message) {
+    // Envoi du message au serveur
+    const auto request = static_cast<uint8_t>(message);
+    if (send(_socketFd, &request, sizeof(request), 0) <= 0) {
+        std::cerr << "Erreur send() : " << std::strerror(errno) << std::endl;
+        return std::nullopt;
+    }
+
+    // Attente de la reponse du serveur
+    uint8_t response = 0;
+    if (recv(_socketFd, &response, sizeof(response), 0) <= 0) {
+        std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
+        return std::nullopt;
+    }
+
+    return static_cast<Protocol::MessageCode>(response);
 }
 
 void TcpClient::close() {
