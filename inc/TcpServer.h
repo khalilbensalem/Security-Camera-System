@@ -31,7 +31,7 @@ public:
      */
     bool init();
 
-    /// Accepte un client et traite ses messages jusqu'a la commande STOP.
+    /// Boucle infinie : accepte un client, le traite, puis en attend un autre.
     void run();
 
 private:

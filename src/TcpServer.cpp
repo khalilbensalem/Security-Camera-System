@@ -58,6 +58,12 @@ std::optional<int> TcpServer::acceptClient() const {
         return std::nullopt;
     }
 
+    // Timeout de reception, pour respecter la contrainte des 60 ms
+    timeval timeout{};
+    timeout.tv_sec = 0;
+    timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
+    setsockopt(clientFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
     char ipStr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, ipStr, sizeof(ipStr));
     std::cout << "Client connecte depuis " << ipStr << std::endl;
@@ -66,12 +72,22 @@ std::optional<int> TcpServer::acceptClient() const {
 }
 
 void TcpServer::handleClient(int clientFd) const {
-    // Boucle tant que le client n'a pas demande l'arret (STOP)
     while (true) {
         uint8_t message = 0;
         const auto received = recv(clientFd, &message, sizeof(message), 0);
-        if (received <= 0) {
-            std::cerr << "Client deconnecte ou erreur recv()" << std::endl;
+
+        if (received == 0) {
+            // Le client a ferme la connexion (deconnexion normale ou tue)
+            std::cout << "Client deconnecte" << std::endl;
+            return;
+        }
+
+        if (received < 0) {
+            // Timeout : aucun message recu durant ce cycle, on continue simplement
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                continue;
+            }
+            std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
             return;
         }
 
@@ -90,13 +106,16 @@ void TcpServer::handleClient(int clientFd) const {
 }
 
 void TcpServer::run() {
-    const auto clientFd = acceptClient();
-    if (!clientFd) {
-        return;
-    }
+    // Le serveur retourne toujours attendre un nouveau client, sauf apres un STOP explicite
+    while (true) {
+        const auto clientFd = acceptClient();
+        if (!clientFd) {
+            continue;
+        }
 
-    handleClient(clientFd.value());
-    close(clientFd.value());
+        handleClient(clientFd.value());
+        close(clientFd.value());
+    }
 }
 
 }  // namespace Server
