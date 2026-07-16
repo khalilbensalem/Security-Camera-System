@@ -16,19 +16,20 @@ namespace Client {
  */
 class CycleStats {
 public:
-    /**
-     * @brief Enregistre un nouveau cycle et affiche un resume si une seconde
-     *        s'est ecoulee depuis le dernier affichage.
-     * @param cycleDuration Duree du cycle qui vient de se terminer.
-     */
-    void recordCycle(std::chrono::steady_clock::duration cycleDuration);
+  /**
+   * @brief Enregistre un nouveau cycle et affiche un resume si une seconde
+   *        s'est ecoulee depuis le dernier affichage.
+   * @param cycleDuration Duree du cycle qui vient de se terminer.
+   */
+  void recordCycle(std::chrono::steady_clock::duration cycleDuration);
 
 private:
-    void report() const;
+  void report() const;
 
-    int _cycleCount = 0;
-    std::chrono::steady_clock::duration _accumulatedDuration{0};
-    std::chrono::steady_clock::time_point _lastReportTime = std::chrono::steady_clock::now();
+  int _cycleCount = 0;
+  std::chrono::steady_clock::duration _accumulatedDuration{0};
+  std::chrono::steady_clock::time_point _lastReportTime =
+      std::chrono::steady_clock::now();
 };
 
-}  // namespace Client
+} // namespace Client

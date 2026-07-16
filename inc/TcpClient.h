@@ -18,31 +18,32 @@ namespace Client {
  */
 class TcpClient {
 public:
-    TcpClient() = default;
-    ~TcpClient();
+  TcpClient() = default;
+  ~TcpClient();
 
-    TcpClient(const TcpClient&) = delete;
-    TcpClient& operator=(const TcpClient&) = delete;
+  TcpClient(const TcpClient &) = delete;
+  TcpClient &operator=(const TcpClient &) = delete;
 
-    /**
-     * @brief Ouvre la connexion TCP/IP vers le serveur.
-     * @param serverIp Adresse IP du serveur (Odroid-C2).
-     * @return true si la connexion a reussi, false sinon.
-     */
-    bool connectToServer(const std::string& serverIp);
+  /**
+   * @brief Ouvre la connexion TCP/IP vers le serveur.
+   * @param serverIp Adresse IP du serveur (Odroid-C2).
+   * @return true si la connexion a reussi, false sinon.
+   */
+  bool connectToServer(const std::string &serverIp);
 
-    /**
-     * @brief Envoie un message au serveur et attend sa reponse.
-     * @param message Code de message a envoyer (voir Protocol::MessageCode).
-     * @return Le code de reponse recu, ou std::nullopt en cas d'erreur.
-     */
-    std::optional<Protocol::MessageCode> sendAndReceive(Protocol::MessageCode message);
+  /**
+   * @brief Envoie un message au serveur et attend sa reponse.
+   * @param message Code de message a envoyer (voir Protocol::MessageCode).
+   * @return Le code de reponse recu, ou std::nullopt en cas d'erreur.
+   */
+  std::optional<Protocol::MessageCode>
+  sendAndReceive(Protocol::MessageCode message);
 
-    /// Ferme la connexion si elle est active.
-    void close();
+  /// Ferme la connexion si elle est active.
+  void close();
 
 private:
-    int _socketFd = -1;
+  int _socketFd = -1;
 };
 
-}  // namespace Client
+} // namespace Client
