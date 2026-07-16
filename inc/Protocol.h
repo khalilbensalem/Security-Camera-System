@@ -19,10 +19,10 @@ constexpr int RECV_TIMEOUT_MS = 60;
 
 // Codes de message echanges entre le client et le serveur
 enum class MessageCode : uint8_t {
-    GetFrame = 1,
-    Stop = 2,
-    FrameHdr = 101,
-    StopAck = 102,
+  GetFrame = 1,
+  Stop = 2,
+  FrameHdr = 101,
+  StopAck = 102,
 };
 
-}  // namespace Protocol
+} // namespace Protocol

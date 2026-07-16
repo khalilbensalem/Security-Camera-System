@@ -5,13 +5,13 @@
 #include "TcpServer.h"
 
 int main() {
-    Server::TcpServer server;
+  Server::TcpServer server;
 
-    if (!server.init()) {
-        return 1;
-    }
+  if (!server.init()) {
+    return 1;
+  }
 
-    server.run();
+  server.run();
 
-    return 0;
+  return 0;
 }
