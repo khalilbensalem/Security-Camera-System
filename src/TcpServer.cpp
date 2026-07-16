@@ -104,7 +104,7 @@ void TcpServer::handleClient(int clientFd) const {
       const auto response =
           static_cast<uint8_t>(Protocol::MessageCode::StopAck);
       send(clientFd, &response, sizeof(response), 0);
-      std::cout << "STOP recu, arret du serveur" << std::endl;
+      std::cout << "Arret demande" << std::endl;
       return;
     }
   }
