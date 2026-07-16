@@ -36,6 +36,7 @@ int main() {
 
     const int key = cv::waitKey(Protocol::CYCLE_INTERVAL_MS) & 0xFF;
     if (key == 'q') {
+      std::cout << "Arret demande" << std::endl;
       client.sendAndReceive(Protocol::MessageCode::Stop);
       running = false;
     }
