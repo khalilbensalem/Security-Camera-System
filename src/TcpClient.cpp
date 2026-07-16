@@ -38,6 +38,11 @@ bool TcpClient::connectToServer(const std::string& serverIp) {
         return false;
     }
 
+    // Timeout de reception, pour respecter la contrainte des 60 ms
+    timeval timeout{};
+    timeout.tv_sec = 0;
+    timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
+    setsockopt(_socketFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     std::cout << "Connecte au serveur " << serverIp << ":" << Protocol::PORT << std::endl;
     return true;
 }

@@ -2,10 +2,12 @@
  * @file main.cpp
  * @brief Point d'entree du programme client.
  */
+#include "CycleStats.h"
 #include "TcpClient.h"
 
 #include <opencv2/opencv.hpp>
 
+#include <chrono>
 #include <iostream>
 
 namespace {
@@ -24,18 +26,22 @@ int main() {
     const cv::Mat blankFrame = cv::Mat::zeros(600, 800, CV_8UC3);
     cv::imshow(WINDOW_NAME, blankFrame);
 
-    // Boucle principale : un cycle GET_FRAME/FRAME_HDR toutes les 30 ms
+    Client::CycleStats stats;
     bool running = true;
+
     while (running) {
+        const auto cycleStart = std::chrono::steady_clock::now();
+
         client.sendAndReceive(Protocol::MessageCode::GetFrame);
 
-        // waitKey sert de minuterie (30 ms) ET de lecture clavier
         const int key = cv::waitKey(Protocol::CYCLE_INTERVAL_MS) & 0xFF;
-
         if (key == 'q') {
             client.sendAndReceive(Protocol::MessageCode::Stop);
             running = false;
         }
+
+        const auto cycleEnd = std::chrono::steady_clock::now();
+        stats.recordCycle(cycleEnd - cycleStart);
     }
 
     client.close();
