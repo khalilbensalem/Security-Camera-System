@@ -31,7 +31,7 @@ public:
      */
     bool init();
 
-    /// Accepte un client et traite son message (GET_FRAME -> FRAME_HDR).
+    /// Accepte un client et traite ses messages jusqu'a la commande STOP.
     void run();
 
 private:
@@ -43,7 +43,7 @@ private:
     std::optional<int> acceptClient() const;
 
     /**
-     * @brief Recoit un message du client et repond selon le protocole.
+     * @brief Boucle de traitement des messages d'un client.
      * @param clientFd Descripteur du socket client.
      */
     void handleClient(int clientFd) const;

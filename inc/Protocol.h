@@ -11,6 +11,9 @@ namespace Protocol {
 // Port TCP/IP utilise par le client et le serveur
 constexpr uint16_t PORT = 4099;
 
+// Intervalle entre deux cycles GET_FRAME, cote client
+constexpr int CYCLE_INTERVAL_MS = 30;
+
 // Codes de message echanges entre le client et le serveur
 enum class MessageCode : uint8_t {
     GetFrame = 1,

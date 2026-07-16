@@ -26,7 +26,6 @@ bool TcpServer::init() {
         std::cerr << "Erreur socket() : " << std::strerror(errno) << std::endl;
         return false;
     }
-
     // Permet de relancer le serveur sans attendre la liberation du port
     const int opt = 1;
     setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -67,19 +66,26 @@ std::optional<int> TcpServer::acceptClient() const {
 }
 
 void TcpServer::handleClient(int clientFd) const {
-    // Reception d'un message d'un octet envoye par le client
-    uint8_t message = 0;
-    const auto received = recv(clientFd, &message, sizeof(message), 0);
-    if (received <= 0) {
-        std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
-        return;
-    }
+    // Boucle tant que le client n'a pas demande l'arret (STOP)
+    while (true) {
+        uint8_t message = 0;
+        const auto received = recv(clientFd, &message, sizeof(message), 0);
+        if (received <= 0) {
+            std::cerr << "Client deconnecte ou erreur recv()" << std::endl;
+            return;
+        }
 
-    // Traitement selon le code de message recu
-    if (static_cast<Protocol::MessageCode>(message) == Protocol::MessageCode::GetFrame) {
-        const auto response = static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
-        send(clientFd, &response, sizeof(response), 0);
-        std::cout << "GET_FRAME recu, FRAME_HDR envoye" << std::endl;
+        const auto code = static_cast<Protocol::MessageCode>(message);
+
+        if (code == Protocol::MessageCode::GetFrame) {
+            const auto response = static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
+            send(clientFd, &response, sizeof(response), 0);
+        } else if (code == Protocol::MessageCode::Stop) {
+            const auto response = static_cast<uint8_t>(Protocol::MessageCode::StopAck);
+            send(clientFd, &response, sizeof(response), 0);
+            std::cout << "STOP recu, arret du serveur" << std::endl;
+            return;
+        }
     }
 }
 
