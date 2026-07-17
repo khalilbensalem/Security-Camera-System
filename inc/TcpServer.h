@@ -1,9 +1,10 @@
 /**
  * @file TcpServer.h
- * @brief Serveur TCP/IP simple gerant une connexion client.
+ * @brief Serveur TCP/IP transmettant des images capturees par la camera.
  */
 #pragma once
 
+#include "Camera.h"
 #include "Protocol.h"
 
 #include <netinet/in.h>
@@ -14,7 +15,7 @@ namespace Server {
 /**
  * @class TcpServer
  * @brief Encapsule un socket serveur TCP/IP : bind, ecoute, acceptation
- *        d'un client et echange de messages selon Protocol::MessageCode.
+ *        d'un client et transmission d'images selon Protocol::MessageCode.
  */
 class TcpServer {
 public:
@@ -26,7 +27,8 @@ public:
 
   /**
    * @brief Cree le socket d'ecoute, applique SO_REUSEADDR, effectue le
-   *        bind et demarre l'ecoute sur le port du protocole.
+   *        bind, demarre l'ecoute sur le port du protocole et initialise
+   *        la camera.
    * @return true si l'initialisation a reussi, false sinon.
    */
   bool init();
@@ -46,10 +48,19 @@ private:
    * @brief Boucle de traitement des messages d'un client.
    * @param clientFd Descripteur du socket client.
    */
-  void handleClient(int clientFd) const;
+  void handleClient(int clientFd);
+
+  /**
+   * @brief Capture une image, l'encode en JPEG et transmet l'en-tete
+   *        complet (FRAME_HDR, frame_id, jpeg_size) suivi des donnees.
+   * @param clientFd Descripteur du socket client.
+   */
+  void sendFrame(int clientFd);
 
   int _listenFd = -1;
   sockaddr_in _serverAddr{};
+  Camera _camera;
+  uint32_t _frameId = 0;
 };
 
 } // namespace Server

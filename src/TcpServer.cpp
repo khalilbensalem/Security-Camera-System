@@ -10,6 +10,26 @@
 #include <iostream>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <vector>
+
+namespace {
+
+// Envoie exactement 'size' octets, meme si send() les livre en plusieurs
+// morceaux (comportement normal des sockets TCP)
+bool sendAll(int fd, const void *data, size_t size) {
+  const auto *bytes = static_cast<const uint8_t *>(data);
+  size_t sent = 0;
+  while (sent < size) {
+    const auto result = send(fd, bytes + sent, size - sent, 0);
+    if (result <= 0) {
+      return false;
+    }
+    sent += static_cast<size_t>(result);
+  }
+  return true;
+}
+
+} // namespace
 
 namespace Server {
 
@@ -20,6 +40,10 @@ TcpServer::~TcpServer() {
 }
 
 bool TcpServer::init() {
+  if (!_camera.init()) {
+    return false;
+  }
+
   // Creation du socket TCP/IP
   _listenFd = socket(AF_INET, SOCK_STREAM, 0);
   if (_listenFd < 0) {
@@ -74,7 +98,32 @@ std::optional<int> TcpServer::acceptClient() const {
   return clientFd;
 }
 
-void TcpServer::handleClient(int clientFd) const {
+void TcpServer::sendFrame(int clientFd) {
+  // Capture d'une image depuis la camera
+  const auto frame = _camera.captureFrame();
+  if (!frame) {
+    return;
+  }
+
+  // Compression JPEG avant transmission (contrainte de l'enonce)
+  std::vector<uchar> jpegBuffer;
+  cv::imencode(".jpg", frame.value(), jpegBuffer);
+
+  ++_frameId;
+
+  // En-tete : FRAME_HDR (1 octet), puis frame_id et jpeg_size en ordre
+  // reseau (32 bits chacun), suivis des donnees JPEG elles-memes
+  const auto header = static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
+  const uint32_t frameIdNet = htonl(_frameId);
+  const uint32_t jpegSizeNet = htonl(static_cast<uint32_t>(jpegBuffer.size()));
+
+  sendAll(clientFd, &header, sizeof(header));
+  sendAll(clientFd, &frameIdNet, sizeof(frameIdNet));
+  sendAll(clientFd, &jpegSizeNet, sizeof(jpegSizeNet));
+  sendAll(clientFd, jpegBuffer.data(), jpegBuffer.size());
+}
+
+void TcpServer::handleClient(int clientFd) {
   while (true) {
     uint8_t message = 0;
     const auto received = recv(clientFd, &message, sizeof(message), 0);
@@ -97,9 +146,7 @@ void TcpServer::handleClient(int clientFd) const {
     const auto code = static_cast<Protocol::MessageCode>(message);
 
     if (code == Protocol::MessageCode::GetFrame) {
-      const auto response =
-          static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
-      send(clientFd, &response, sizeof(response), 0);
+      sendFrame(clientFd);
     } else if (code == Protocol::MessageCode::Stop) {
       const auto response =
           static_cast<uint8_t>(Protocol::MessageCode::StopAck);
@@ -111,8 +158,8 @@ void TcpServer::handleClient(int clientFd) const {
 }
 
 void TcpServer::run() {
-  // Le serveur retourne toujours attendre un nouveau client, sauf apres un STOP
-  // explicite
+  // Le serveur retourne toujours attendre un nouveau client, sauf apres un
+  // STOP explicite
   while (true) {
     const auto clientFd = acceptClient();
     if (!clientFd) {
