@@ -2,17 +2,13 @@
  * @file main.cpp
  * @brief Point d'entree du programme client.
  */
-#include "CycleStats.h"
 #include "TcpClient.h"
 
-#include <opencv2/opencv.hpp>
-
-#include <chrono>
+#include <fstream>
 #include <iostream>
 
 namespace {
 constexpr const char *SERVER_IP = "192.168.7.2";
-constexpr const char *WINDOW_NAME = "Surveillance video";
 } // namespace
 
 int main() {
@@ -22,27 +18,16 @@ int main() {
     return 1;
   }
 
-  cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
-  const cv::Mat blankFrame = cv::Mat::zeros(600, 800, CV_8UC3);
-  cv::imshow(WINDOW_NAME, blankFrame);
-
-  Client::CycleStats stats;
-  bool running = true;
-
-  while (running) {
-    const auto cycleStart = std::chrono::steady_clock::now();
-
-    client.sendAndReceive(Protocol::MessageCode::GetFrame);
-
-    const int key = cv::waitKey(Protocol::CYCLE_INTERVAL_MS) & 0xFF;
-    if (key == 'q') {
-      std::cout << "Arret demande" << std::endl;
-      client.sendAndReceive(Protocol::MessageCode::Stop);
-      running = false;
-    }
-
-    const auto cycleEnd = std::chrono::steady_clock::now();
-    stats.recordCycle(cycleEnd - cycleStart);
+  // Etape 2 du livrable 2 : validation d'une seule image recue, sauvegardee
+  // sur disque pour inspection visuelle (l'affichage OpenCV vient a l'etape
+  // suivante)
+  const auto frame = client.requestFrame();
+  if (frame) {
+    std::ofstream file("test_received.jpg", std::ios::binary);
+    file.write(reinterpret_cast<const char *>(frame->jpegData.data()),
+               frame->jpegData.size());
+    std::cout << "Image recue (frame " << frame->frameId
+              << ") sauvegardee dans test_received.jpg" << std::endl;
   }
 
   client.close();

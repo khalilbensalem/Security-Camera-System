@@ -42,21 +42,33 @@ bool TcpClient::connectToServer(const std::string &serverIp) {
   timeout.tv_sec = 0;
   timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
   setsockopt(_socketFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
   std::cout << "Connecte au serveur " << serverIp << ":" << Protocol::PORT
             << std::endl;
   return true;
 }
 
+bool TcpClient::receiveAll(void *buffer, size_t size) {
+  auto *bytes = static_cast<uint8_t *>(buffer);
+  size_t received = 0;
+  while (received < size) {
+    const auto result = recv(_socketFd, bytes + received, size - received, 0);
+    if (result <= 0) {
+      return false;
+    }
+    received += static_cast<size_t>(result);
+  }
+  return true;
+}
+
 std::optional<Protocol::MessageCode>
 TcpClient::sendAndReceive(Protocol::MessageCode message) {
-  // Envoi du message au serveur
   const auto request = static_cast<uint8_t>(message);
   if (send(_socketFd, &request, sizeof(request), 0) <= 0) {
     std::cerr << "Erreur send() : " << std::strerror(errno) << std::endl;
     return std::nullopt;
   }
 
-  // Attente de la reponse du serveur
   uint8_t response = 0;
   if (recv(_socketFd, &response, sizeof(response), 0) <= 0) {
     std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
@@ -64,6 +76,45 @@ TcpClient::sendAndReceive(Protocol::MessageCode message) {
   }
 
   return static_cast<Protocol::MessageCode>(response);
+}
+
+std::optional<Frame> TcpClient::requestFrame() {
+  const auto request = static_cast<uint8_t>(Protocol::MessageCode::GetFrame);
+  if (send(_socketFd, &request, sizeof(request), 0) <= 0) {
+    return std::nullopt;
+  }
+
+  // Reception de l'en-tete : code de message
+  uint8_t header = 0;
+  if (!receiveAll(&header, sizeof(header))) {
+    return std::nullopt;
+  }
+  if (static_cast<Protocol::MessageCode>(header) !=
+      Protocol::MessageCode::FrameHdr) {
+    return std::nullopt;
+  }
+
+  // Reception de frame_id et jpeg_size (ordre reseau -> ordre hote)
+  uint32_t frameIdNet = 0;
+  uint32_t jpegSizeNet = 0;
+  if (!receiveAll(&frameIdNet, sizeof(frameIdNet))) {
+    return std::nullopt;
+  }
+  if (!receiveAll(&jpegSizeNet, sizeof(jpegSizeNet))) {
+    return std::nullopt;
+  }
+
+  Frame frame;
+  frame.frameId = ntohl(frameIdNet);
+  const uint32_t jpegSize = ntohl(jpegSizeNet);
+
+  // Reception des donnees JPEG elles-memes, taille inconnue a l'avance
+  frame.jpegData.resize(jpegSize);
+  if (!receiveAll(frame.jpegData.data(), jpegSize)) {
+    return std::nullopt;
+  }
+
+  return frame;
 }
 
 void TcpClient::close() {

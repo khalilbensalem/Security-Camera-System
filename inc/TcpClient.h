@@ -6,15 +6,23 @@
 
 #include "Protocol.h"
 
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Client {
+
+/// Image recue du serveur : numero de frame et donnees JPEG brutes.
+struct Frame {
+  uint32_t frameId;
+  std::vector<uint8_t> jpegData;
+};
 
 /**
  * @class TcpClient
  * @brief Encapsule la connexion TCP/IP et l'echange de messages avec le
- *        serveur, selon Protocol::MessageCode.
+ *        serveur, y compris la reception d'images.
  */
 class TcpClient {
 public:
@@ -32,17 +40,33 @@ public:
   bool connectToServer(const std::string &serverIp);
 
   /**
-   * @brief Envoie un message au serveur et attend sa reponse.
-   * @param message Code de message a envoyer (voir Protocol::MessageCode).
+   * @brief Envoie un message simple d'un octet et attend la reponse
+   *        (utilise pour STOP).
+   * @param message Code de message a envoyer.
    * @return Le code de reponse recu, ou std::nullopt en cas d'erreur.
    */
   std::optional<Protocol::MessageCode>
   sendAndReceive(Protocol::MessageCode message);
 
+  /**
+   * @brief Envoie GET_FRAME et recoit l'image complete (en-tete + JPEG).
+   * @return La frame recue, ou std::nullopt en cas d'erreur.
+   */
+  std::optional<Frame> requestFrame();
+
   /// Ferme la connexion si elle est active.
   void close();
 
 private:
+  /**
+   * @brief Recoit exactement 'size' octets, meme si recv() les livre en
+   *        plusieurs morceaux.
+   * @param buffer Destination des donnees recues.
+   * @param size Nombre d'octets attendus.
+   * @return true si tous les octets ont ete recus, false en cas d'erreur.
+   */
+  bool receiveAll(void *buffer, size_t size);
+
   int _socketFd = -1;
 };
 
