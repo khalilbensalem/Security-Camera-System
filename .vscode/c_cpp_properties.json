@@ -3,7 +3,8 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "/opt/poky/4.0.28/sysroots/cortexa53-poky-linux/usr/include/opencv4"
             ],
             "defines": [],
             "cStandard": "c17",
