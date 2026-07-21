@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <string>
 
 namespace {
 constexpr const char *SERVER_IP = "192.168.7.2";
@@ -30,10 +31,14 @@ int main() {
 
     const auto frame = client.requestFrame();
     if (frame) {
+      // Affiche le numero de la frame dans le coin superieur gauche
+      cv::putText(frame->image, "Frame: " + std::to_string(frame->frameId),
+                  cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                  cv::Scalar(0, 255, 0), 2);
+
       cv::imshow(WINDOW_NAME, frame->image);
     }
 
-    // cv::waitKey sert a la fois de minuterie (30 ms) et de lecture clavier
     const int key = cv::waitKey(Protocol::CYCLE_INTERVAL_MS) & 0xFF;
     if (key == 'q') {
       std::cout << "Arret demande" << std::endl;
