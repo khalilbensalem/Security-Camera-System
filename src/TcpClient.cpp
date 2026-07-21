@@ -1,7 +1,3 @@
-/**
- * @file TcpClient.cpp
- * @brief Implementation de la classe TcpClient.
- */
 #include "TcpClient.h"
 
 #include <arpa/inet.h>
@@ -37,7 +33,6 @@ bool TcpClient::connectToServer(const std::string &serverIp) {
     return false;
   }
 
-  // Timeout de reception, pour respecter la contrainte des 60 ms
   timeval timeout{};
   timeout.tv_sec = 0;
   timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
@@ -49,29 +44,27 @@ bool TcpClient::connectToServer(const std::string &serverIp) {
 }
 
 bool TcpClient::receiveAll(void *buffer, size_t size) {
-  auto *bytes = static_cast<uint8_t *>(buffer);
+  auto *ptr = static_cast<uint8_t *>(buffer);
   size_t received = 0;
   while (received < size) {
-    const auto result = recv(_socketFd, bytes + received, size - received, 0);
-    if (result <= 0) {
+    const auto n = recv(_socketFd, ptr + received, size - received, 0);
+    if (n <= 0) {
       return false;
     }
-    received += static_cast<size_t>(result);
+    received += static_cast<size_t>(n);
   }
   return true;
 }
 
 std::optional<Protocol::MessageCode>
 TcpClient::sendAndReceive(Protocol::MessageCode message) {
-  const auto request = static_cast<uint8_t>(message);
-  if (send(_socketFd, &request, sizeof(request), 0) <= 0) {
-    std::cerr << "Erreur send() : " << std::strerror(errno) << std::endl;
+  const auto code = static_cast<uint8_t>(message);
+  if (send(_socketFd, &code, sizeof(code), 0) <= 0) {
     return std::nullopt;
   }
 
   uint8_t response = 0;
   if (recv(_socketFd, &response, sizeof(response), 0) <= 0) {
-    std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
     return std::nullopt;
   }
 
@@ -79,42 +72,40 @@ TcpClient::sendAndReceive(Protocol::MessageCode message) {
 }
 
 std::optional<Frame> TcpClient::requestFrame() {
-  const auto request = static_cast<uint8_t>(Protocol::MessageCode::GetFrame);
-  if (send(_socketFd, &request, sizeof(request), 0) <= 0) {
+  const auto code = static_cast<uint8_t>(Protocol::MessageCode::GetFrame);
+  if (send(_socketFd, &code, sizeof(code), 0) <= 0) {
     return std::nullopt;
   }
 
-  // Reception de l'en-tete : code de message
   uint8_t header = 0;
-  if (!receiveAll(&header, sizeof(header))) {
+  if (!receiveAll(&header, sizeof(header)))
     return std::nullopt;
-  }
   if (static_cast<Protocol::MessageCode>(header) !=
       Protocol::MessageCode::FrameHdr) {
     return std::nullopt;
   }
 
-  // Reception de frame_id et jpeg_size (ordre reseau -> ordre hote)
   uint32_t frameIdNet = 0;
   uint32_t jpegSizeNet = 0;
-  if (!receiveAll(&frameIdNet, sizeof(frameIdNet))) {
+  if (!receiveAll(&frameIdNet, sizeof(frameIdNet)))
     return std::nullopt;
-  }
-  if (!receiveAll(&jpegSizeNet, sizeof(jpegSizeNet))) {
+  if (!receiveAll(&jpegSizeNet, sizeof(jpegSizeNet)))
     return std::nullopt;
-  }
 
-  Frame frame;
-  frame.frameId = ntohl(frameIdNet);
+  const uint32_t frameId = ntohl(frameIdNet);
   const uint32_t jpegSize = ntohl(jpegSizeNet);
 
-  // Reception des donnees JPEG elles-memes, taille inconnue a l'avance
-  frame.jpegData.resize(jpegSize);
-  if (!receiveAll(frame.jpegData.data(), jpegSize)) {
+  std::vector<uchar> jpegBuffer(jpegSize);
+  if (!receiveAll(jpegBuffer.data(), jpegSize))
+    return std::nullopt;
+
+  const cv::Mat image = cv::imdecode(jpegBuffer, cv::IMREAD_COLOR);
+  if (image.empty()) {
+    std::cerr << "Erreur : decodage JPEG echoue" << std::endl;
     return std::nullopt;
   }
 
-  return frame;
+  return Frame{frameId, image};
 }
 
 void TcpClient::close() {
