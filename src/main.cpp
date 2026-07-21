@@ -1,6 +1,7 @@
-/// @file main.cpp
-/// @brief Point d'entree du programme client (poste de travail).
-
+/**
+ * @file main.cpp
+ * @brief Point d'entree du programme client (poste de travail).
+ */
 #include "CycleStats.h"
 #include "TcpClient.h"
 
