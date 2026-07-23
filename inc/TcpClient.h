@@ -56,7 +56,9 @@ public:
   std::optional<Protocol::MessageCode>
   sendAndReceive(Protocol::MessageCode message);
 
-  /// Ferme la connexion si elle est active.
+  /**
+   * @brief Ferme la connexion si elle est active.
+   */
   void close();
 
 private:

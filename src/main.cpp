@@ -7,6 +7,7 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -40,7 +41,16 @@ int main() {
       cv::imshow(WINDOW_NAME, frame->image);
     }
 
-    const int key = cv::waitKey(Protocol::CYCLE_INTERVAL_MS) & 0xFF;
+    // Soustrait le temps deja ecoule (requete + affichage) du delai
+    // d'attente, pour que le cycle TOTAL dure ~30 ms plutot que d'ajouter
+    // 30 ms de plus par-dessus le traitement.
+    const auto elapsed = std::chrono::steady_clock::now() - cycleStart;
+    const auto elapsedMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+    const int remainingMs =
+        std::max(1, static_cast<int>(Protocol::CYCLE_INTERVAL_MS - elapsedMs));
+
+    const int key = cv::waitKey(remainingMs) & 0xFF;
     if (key == 'q') {
       std::cout << "Arret demande" << std::endl;
       client.sendAndReceive(Protocol::MessageCode::Stop);
