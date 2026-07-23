@@ -3,28 +3,69 @@
  * @brief Implementation de la classe Camera.
  */
 #include "Camera.h"
-
+#include <fcntl.h>
 #include <iostream>
+#include <unistd.h>
 
 namespace {
-// Resolution imposee par l'enonce du livrable 2
+// Resolution et taux de rafraichissement imposes par l'enonce du livrable 2
 constexpr int FRAME_WIDTH = 800;
 constexpr int FRAME_HEIGHT = 600;
+constexpr int FRAME_FPS = 30;
+
+// Redirige stderr vers /dev/null le temps de sa duree de vie, puis le
+// restaure. Masque les avertissements libjpeg benins emis lors du decodage
+// MJPG materiel de la camera (voir Camera::init()).
+class ScopedStderrSuppressor {
+
+public:
+  ScopedStderrSuppressor() {
+    _savedStderr = dup(STDERR_FILENO);
+    const int devNull = open("/dev/null", O_WRONLY);
+    if (devNull >= 0) {
+      dup2(devNull, STDERR_FILENO);
+      close(devNull);
+    }
+  }
+
+  ~ScopedStderrSuppressor() {
+    if (_savedStderr >= 0) {
+      dup2(_savedStderr, STDERR_FILENO);
+      close(_savedStderr);
+    }
+  }
+
+  ScopedStderrSuppressor(const ScopedStderrSuppressor &) = delete;
+  ScopedStderrSuppressor &operator=(const ScopedStderrSuppressor &) = delete;
+
+private:
+  int _savedStderr = -1;
+};
+
 } // namespace
 
 namespace Server {
 
 bool Camera::init() {
-  // Ouverture de la premiere camera USB detectee (index 0)
-  _videoCapture.open(0);
+  // Backend V4L2 explicite (le backend par defaut tentait GStreamer sans
+  // succes)
+  _videoCapture.open(0, cv::CAP_V4L2);
   if (!_videoCapture.isOpened()) {
     std::cerr << "Erreur : impossible d'ouvrir la camera USB" << std::endl;
     return false;
   }
 
-  // Configuration de la resolution demandee par l'enonce
+  // Le format doit etre impose avant la resolution : le pilote V4L2 negocie
+  // le fps selon le format de pixel courant. En YUYV brut, le bus USB
+  // plafonne a 20 fps a cette resolution ; en MJPG (compresse par la
+  // camera), le vrai 30 fps vise par le cycle est atteignable.
+  _videoCapture.set(cv::CAP_PROP_FOURCC,
+                    cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+
+  // Resolution et fps demandes par l'enonce, une fois le format MJPG etabli
   _videoCapture.set(cv::CAP_PROP_FRAME_WIDTH, FRAME_WIDTH);
   _videoCapture.set(cv::CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
+  _videoCapture.set(cv::CAP_PROP_FPS, FRAME_FPS);
 
   std::cout << "Camera ouverte avec succes" << std::endl;
   return true;
@@ -32,9 +73,15 @@ bool Camera::init() {
 
 std::optional<cv::Mat> Camera::captureFrame() {
   cv::Mat frame;
+  bool readOk = false;
 
-  // Lecture bloquante d'une image depuis la camera
-  if (!_videoCapture.read(frame) || frame.empty()) {
+  {
+    // Scope limite a read() : le message d'erreur ci-dessous reste visible
+    ScopedStderrSuppressor suppressStderr;
+    readOk = _videoCapture.read(frame);
+  }
+
+  if (!readOk || frame.empty()) {
     std::cerr << "Erreur : capture d'image echouee" << std::endl;
     return std::nullopt;
   }

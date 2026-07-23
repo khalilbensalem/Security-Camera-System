@@ -6,7 +6,6 @@
 
 #include "Camera.h"
 #include "Protocol.h"
-
 #include <netinet/in.h>
 #include <optional>
 
@@ -26,9 +25,9 @@ public:
   TcpServer &operator=(const TcpServer &) = delete;
 
   /**
-   * @brief Cree le socket d'ecoute, applique SO_REUSEADDR, effectue le
-   *        bind, demarre l'ecoute sur le port du protocole et initialise
-   *        la camera.
+   * @brief Ignore SIGPIPE, cree le socket d'ecoute, applique SO_REUSEADDR,
+   *        effectue le bind, demarre l'ecoute sur le port du protocole et
+   *        initialise la camera.
    * @return true si l'initialisation a reussi, false sinon.
    */
   bool init();

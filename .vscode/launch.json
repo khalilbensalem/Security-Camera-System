@@ -20,6 +20,10 @@
                 {
                     "description": "Set sysroot",
                     "text": "set sysroot /opt/poky/4.0.28/sysroots/cortexa53-poky-linux/"
+                },
+                {
+                    "description": "Ne pas arreter le debogueur sur SIGPIPE",
+                    "text": "handle SIGPIPE nostop noprint pass"
                 }
             ]
         }

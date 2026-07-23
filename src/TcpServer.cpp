@@ -5,14 +5,22 @@
 #include "TcpServer.h"
 
 #include <arpa/inet.h>
+#include <array>
 #include <cerrno>
+#include <csignal>
 #include <cstring>
 #include <iostream>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <vector>
 
 namespace {
+
+// Qualite JPEG (0-100). Reduite depuis la valeur par defaut d'OpenCV (95)
+// pour diminuer le temps d'encodage et la taille transmise sur le reseau,
+// afin de respecter le cycle de 30 ms impose par le protocole.
+constexpr int JPEG_QUALITY = 85;
 
 // Envoie exactement 'size' octets, meme si send() les livre en plusieurs
 // morceaux (comportement normal des sockets TCP)
@@ -40,6 +48,11 @@ TcpServer::~TcpServer() {
 }
 
 bool TcpServer::init() {
+  // Ignore SIGPIPE : sinon, un send() vers un client deconnecte (CTRL+C)
+  // tue le processus au lieu d'echouer simplement (EPIPE), deja gere par
+  // sendAll(). Requis par l'exigence de resilience de l'enonce.
+  std::signal(SIGPIPE, SIG_IGN);
+
   if (!_camera.init()) {
     return false;
   }
@@ -91,6 +104,11 @@ std::optional<int> TcpServer::acceptClient() const {
   timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
   setsockopt(clientFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
+  // Desactive l'algorithme de Nagle, qui ajouterait des dizaines de ms au
+  // cycle de 30 ms en attendant de regrouper les petits messages
+  const int noDelay = 1;
+  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &noDelay, sizeof(noDelay));
+
   char ipStr[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &clientAddr.sin_addr, ipStr, sizeof(ipStr));
   std::cout << "Client connecte depuis " << ipStr << std::endl;
@@ -107,19 +125,27 @@ void TcpServer::sendFrame(int clientFd) {
 
   // Compression JPEG avant transmission (contrainte de l'enonce)
   std::vector<uchar> jpegBuffer;
-  cv::imencode(".jpg", frame.value(), jpegBuffer);
+  const std::vector<int> jpegParams{cv::IMWRITE_JPEG_QUALITY, JPEG_QUALITY};
+  cv::imencode(".jpg", frame.value(), jpegBuffer, jpegParams);
 
   ++_frameId;
 
-  // En-tete : FRAME_HDR (1 octet), puis frame_id et jpeg_size en ordre
-  // reseau (32 bits chacun), suivis des donnees JPEG elles-memes
+  // En-tete (FRAME_HDR + frame_id + jpeg_size, ordre reseau) assemble dans
+  // un seul buffer et envoye en un seul send() plutot que trois
   const auto header = static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
   const uint32_t frameIdNet = htonl(_frameId);
   const uint32_t jpegSizeNet = htonl(static_cast<uint32_t>(jpegBuffer.size()));
 
-  sendAll(clientFd, &header, sizeof(header));
-  sendAll(clientFd, &frameIdNet, sizeof(frameIdNet));
-  sendAll(clientFd, &jpegSizeNet, sizeof(jpegSizeNet));
+  std::array<uint8_t, sizeof(header) + sizeof(frameIdNet) + sizeof(jpegSizeNet)>
+      headerBuffer{};
+  size_t offset = 0;
+  std::memcpy(headerBuffer.data() + offset, &header, sizeof(header));
+  offset += sizeof(header);
+  std::memcpy(headerBuffer.data() + offset, &frameIdNet, sizeof(frameIdNet));
+  offset += sizeof(frameIdNet);
+  std::memcpy(headerBuffer.data() + offset, &jpegSizeNet, sizeof(jpegSizeNet));
+
+  sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
   sendAll(clientFd, jpegBuffer.data(), jpegBuffer.size());
 }
 
