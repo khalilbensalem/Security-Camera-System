@@ -14,11 +14,13 @@
 namespace Client {
 
 /**
- * @brief Represente une image recue du serveur, avec son numero.
+ * @brief Represente une image recue du serveur, avec son numero et une
+ *        indication si elle provient d'un evenement bouton.
  */
 struct Frame {
   uint32_t frameId;
   cv::Mat image;
+  bool isButtonPress = false;
 };
 
 /**
@@ -43,6 +45,8 @@ public:
 
   /**
    * @brief Envoie GET_FRAME et recoit l'image complete (en-tete + JPEG).
+   *        La reponse peut etre FRAME_HDR (cas normal) ou BUTTON_PRESS
+   *        (un appui a eu lieu cote serveur), voir Frame::isButtonPress.
    * @return La frame recue, ou std::nullopt en cas d'erreur.
    */
   std::optional<Frame> requestFrame();

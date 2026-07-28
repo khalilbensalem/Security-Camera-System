@@ -57,6 +57,16 @@ int main() {
                   cv::Scalar(0, 255, 0), 2);
 
       cv::imshow(WINDOW_NAME, frame->image);
+
+      // Un appui sur le bouton a ete signale par le serveur : on
+      // sauvegarde l'image en plus de l'afficher normalement.
+      if (frame->isButtonPress) {
+        const std::string filename = std::string(IMAGES_DIR) +
+                                     "/capture_frame_" +
+                                     std::to_string(frame->frameId) + ".jpg";
+        cv::imwrite(filename, frame->image);
+        std::cout << "Image sauvegardee : " << filename << std::endl;
+      }
     }
 
     // Soustrait le temps deja ecoule (requete + affichage) du delai
