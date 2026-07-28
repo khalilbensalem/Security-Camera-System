@@ -23,6 +23,7 @@ enum class MessageCode : uint8_t {
   Stop = 2,
   FrameHdr = 101,
   StopAck = 102,
+  ButtonPress = 103,
 };
 
 } // namespace Protocol
