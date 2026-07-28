@@ -80,8 +80,13 @@ std::optional<Frame> TcpClient::requestFrame() {
   uint8_t header = 0;
   if (!receiveAll(&header, sizeof(header)))
     return std::nullopt;
-  if (static_cast<Protocol::MessageCode>(header) !=
-      Protocol::MessageCode::FrameHdr) {
+
+  const auto messageCode = static_cast<Protocol::MessageCode>(header);
+  // On accepte desormais deux types de reponse valides a GET_FRAME :
+  // FRAME_HDR (cas normal) et BUTTON_PRESS (un appui a eu lieu cote
+  // serveur). Les deux partagent exactement la meme structure de message.
+  if (messageCode != Protocol::MessageCode::FrameHdr &&
+      messageCode != Protocol::MessageCode::ButtonPress) {
     return std::nullopt;
   }
 
@@ -105,7 +110,8 @@ std::optional<Frame> TcpClient::requestFrame() {
     return std::nullopt;
   }
 
-  return Frame{frameId, image};
+  return Frame{frameId, image,
+               messageCode == Protocol::MessageCode::ButtonPress};
 }
 
 void TcpClient::close() {
