@@ -57,6 +57,10 @@ bool TcpServer::init() {
     return false;
   }
 
+  if (!_button.init("gpiochip1", 29)) {
+    return false;
+  }
+
   // Creation du socket TCP/IP
   _listenFd = socket(AF_INET, SOCK_STREAM, 0);
   if (_listenFd < 0) {
@@ -130,9 +134,14 @@ void TcpServer::sendFrame(int clientFd) {
 
   ++_frameId;
 
-  // En-tete (FRAME_HDR + frame_id + jpeg_size, ordre reseau) assemble dans
-  // un seul buffer et envoye en un seul send() plutot que trois
-  const auto header = static_cast<uint8_t>(Protocol::MessageCode::FrameHdr);
+  // Si un appui bouton est en attente, on remplace FRAME_HDR par
+  // BUTTON_PRESS pour cette frame (meme structure de message, seul le
+  // code de commande change). consumePressEvent() reinitialise l'etat,
+  // garantissant qu'un appui ne declenche qu'une seule sauvegarde.
+  const auto messageCode = _button.consumePressEvent()
+                               ? Protocol::MessageCode::ButtonPress
+                               : Protocol::MessageCode::FrameHdr;
+  const auto header = static_cast<uint8_t>(messageCode);
   const uint32_t frameIdNet = htonl(_frameId);
   const uint32_t jpegSizeNet = htonl(static_cast<uint32_t>(jpegBuffer.size()));
 
@@ -149,7 +158,7 @@ void TcpServer::sendFrame(int clientFd) {
   sendAll(clientFd, jpegBuffer.data(), jpegBuffer.size());
 }
 
-void TcpServer::handleClient(int clientFd) {
+bool TcpServer::handleClient(int clientFd) {
   while (true) {
     uint8_t message = 0;
     const auto received = recv(clientFd, &message, sizeof(message), 0);
@@ -157,7 +166,7 @@ void TcpServer::handleClient(int clientFd) {
     if (received == 0) {
       // Le client a ferme la connexion (deconnexion normale ou tue)
       std::cout << "Client deconnecte" << std::endl;
-      return;
+      return false;
     }
 
     if (received < 0) {
@@ -166,7 +175,7 @@ void TcpServer::handleClient(int clientFd) {
         continue;
       }
       std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
-      return;
+      return false;
     }
 
     const auto code = static_cast<Protocol::MessageCode>(message);
@@ -178,22 +187,26 @@ void TcpServer::handleClient(int clientFd) {
           static_cast<uint8_t>(Protocol::MessageCode::StopAck);
       send(clientFd, &response, sizeof(response), 0);
       std::cout << "Arret demande" << std::endl;
-      return;
+      return true;
     }
   }
 }
 
 void TcpServer::run() {
   // Le serveur retourne toujours attendre un nouveau client, sauf apres un
-  // STOP explicite
+  // STOP explicite (handleClient() retourne alors true)
   while (true) {
     const auto clientFd = acceptClient();
     if (!clientFd) {
       continue;
     }
 
-    handleClient(clientFd.value());
+    const bool stopRequested = handleClient(clientFd.value());
     close(clientFd.value());
+
+    if (stopRequested) {
+      return;
+    }
   }
 }
 

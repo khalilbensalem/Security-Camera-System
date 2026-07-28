@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Camera.h"
+#include "GpioButton.h"
 #include "Protocol.h"
 #include <netinet/in.h>
 #include <optional>
@@ -27,12 +28,15 @@ public:
   /**
    * @brief Ignore SIGPIPE, cree le socket d'ecoute, applique SO_REUSEADDR,
    *        effectue le bind, demarre l'ecoute sur le port du protocole et
-   *        initialise la camera.
+   *        initialise la camera et le bouton GPIO.
    * @return true si l'initialisation a reussi, false sinon.
    */
   bool init();
 
-  /// Boucle infinie : accepte un client, le traite, puis en attend un autre.
+  /**
+   * @brief Accepte un client, le traite, puis en attend un autre, jusqu'a
+   *        ce qu'un arret explicite (STOP) soit recu.
+   */
   void run();
 
 private:
@@ -46,12 +50,15 @@ private:
   /**
    * @brief Boucle de traitement des messages d'un client.
    * @param clientFd Descripteur du socket client.
+   * @return true si un arret explicite (STOP) a ete recu, false si le
+   *         client s'est deconnecte ou en cas d'erreur.
    */
-  void handleClient(int clientFd);
+  bool handleClient(int clientFd);
 
   /**
    * @brief Capture une image, l'encode en JPEG et transmet l'en-tete
-   *        complet (FRAME_HDR, frame_id, jpeg_size) suivi des donnees.
+   *        complet (FRAME_HDR ou BUTTON_PRESS, frame_id, jpeg_size) suivi
+   *        des donnees.
    * @param clientFd Descripteur du socket client.
    */
   void sendFrame(int clientFd);
@@ -59,6 +66,7 @@ private:
   int _listenFd = -1;
   sockaddr_in _serverAddr{};
   Camera _camera;
+  GpioButton _button;
   uint32_t _frameId = 0;
 };
 
