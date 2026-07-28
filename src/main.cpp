@@ -9,12 +9,28 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
 namespace {
 constexpr const char *SERVER_IP = "192.168.7.2";
 constexpr const char *WINDOW_NAME = "Surveillance video";
+constexpr const char *IMAGES_DIR = "images";
+
+// Cree le repertoire "images" s'il n'existe pas, ou le vide s'il existe
+// deja (exigence du Livrable 3 : purge au demarrage du client).
+void prepareImagesDirectory() {
+  namespace fs = std::filesystem;
+  const fs::path dir(IMAGES_DIR);
+  if (fs::exists(dir)) {
+    for (const auto &entry : fs::directory_iterator(dir)) {
+      fs::remove_all(entry.path());
+    }
+  } else {
+    fs::create_directories(dir);
+  }
+}
 } // namespace
 
 int main() {
@@ -24,6 +40,8 @@ int main() {
   if (!client.connectToServer(SERVER_IP)) {
     return 1;
   }
+
+  prepareImagesDirectory();
 
   cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
 
