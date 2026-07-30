@@ -57,7 +57,9 @@ bool TcpServer::init() {
     return false;
   }
 
-  if (!_button.init("gpiochip1", 29)) {
+  // Ligne 29 correspond a "eMMC Reset" (deja reservee par le noyau) : la
+  // broche physique 29 du header J2 est en realite l'offset 92, cf. gpioinfo.
+  if (!_button.init("gpiochip1", 92)) {
     return false;
   }
 

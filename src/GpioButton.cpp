@@ -38,28 +38,34 @@ bool GpioButton::consumePressEvent() {
 }
 
 void GpioButton::monitorLoop() {
-  gpiod::chip chip(_chipName);
-  gpiod::line line = chip.get_line(_lineOffset);
-  line.request({"button_monitor", gpiod::line_request::DIRECTION_INPUT, 0});
+  try {
+    gpiod::chip chip(_chipName);
+    gpiod::line line = chip.get_line(_lineOffset);
+    line.request({"button_monitor", gpiod::line_request::DIRECTION_INPUT, 0});
 
-  int lastValue = line.get_value();
-  auto lastChangeTime = std::chrono::steady_clock::now();
+    int lastValue = line.get_value();
+    auto lastChangeTime = std::chrono::steady_clock::now();
 
-  while (_running) {
-    const int value = line.get_value();
-    const auto now = std::chrono::steady_clock::now();
+    while (_running) {
+      const int value = line.get_value();
+      const auto now = std::chrono::steady_clock::now();
 
-    // Anti-rebond : on n'accepte un changement que 50 ms apres le dernier
-    if (value != lastValue && (now - lastChangeTime) > DEBOUNCE_DELAY) {
-      lastChangeTime = now;
-      lastValue = value;
+      // Anti-rebond : on n'accepte un changement que 50 ms apres le dernier
+      if (value != lastValue && (now - lastChangeTime) > DEBOUNCE_DELAY) {
+        lastChangeTime = now;
+        lastValue = value;
 
-      if (value == 1) { // a ajuster selon actif haut/bas de ton cablage
-        _pressed = true;
+        if (value == 1) { // a ajuster selon actif haut/bas de ton cablage
+          _pressed = true;
+        }
       }
-    }
 
-    std::this_thread::sleep_for(POLL_INTERVAL);
+      std::this_thread::sleep_for(POLL_INTERVAL);
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "GpioButton: erreur sur " << _chipName << " ligne "
+              << _lineOffset << " : " << e.what() << std::endl;
+    _running = false;
   }
 }
 
