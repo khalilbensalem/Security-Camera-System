@@ -7,3 +7,5 @@ docs/
 # Fichiers temporaires d'éditeurs
 *.swp
 .DS_Store
+
+images/
