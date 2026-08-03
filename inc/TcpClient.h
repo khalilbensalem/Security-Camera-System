@@ -18,9 +18,10 @@ namespace Client {
  *        indication si elle provient d'un evenement bouton.
  */
 struct Frame {
-  uint32_t frameId;
-  cv::Mat image;
-  bool isButtonPress = false;
+  uint32_t frameId; ///< Numero de la frame, attribue par le serveur.
+  cv::Mat image;    ///< Image decodee (BGR) prete a etre affichee.
+  bool isButtonPress =
+      false; ///< true si cette frame provient d'un evenement BUTTON_PRESS.
 };
 
 /**
@@ -30,10 +31,16 @@ struct Frame {
  */
 class TcpClient {
 public:
+  /// @brief Construit un client non connecte.
   TcpClient() = default;
+  /// @brief Ferme la connexion si elle est encore active.
   ~TcpClient();
 
+  /// @brief Non copiable : un TcpClient possede un descripteur de socket
+  /// unique.
   TcpClient(const TcpClient &) = delete;
+  /// @brief Non copiable : un TcpClient possede un descripteur de socket
+  /// unique.
   TcpClient &operator=(const TcpClient &) = delete;
 
   /**
@@ -75,7 +82,7 @@ private:
    */
   bool receiveAll(void *buffer, size_t size);
 
-  int _socketFd = -1;
+  int _socketFd = -1; ///< Descripteur du socket TCP, -1 si non connecte.
 };
 
 } // namespace Client

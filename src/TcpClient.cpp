@@ -1,3 +1,7 @@
+/**
+ * @file TcpClient.cpp
+ * @brief Implementation de la classe TcpClient.
+ */
 #include "TcpClient.h"
 
 #include <arpa/inet.h>

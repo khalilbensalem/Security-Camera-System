@@ -14,12 +14,15 @@
 #include <string>
 
 namespace {
+/// Adresse IP du serveur (Odroid-C2) auquel le client se connecte.
 constexpr const char *SERVER_IP = "192.168.7.2";
+/// Titre de la fenetre OpenCV d'affichage video.
 constexpr const char *WINDOW_NAME = "Surveillance video";
+/// Repertoire ou sont sauvegardees les images capturees sur appui bouton.
 constexpr const char *IMAGES_DIR = "images";
 
-// Cree le repertoire "images" s'il n'existe pas, ou le vide s'il existe
-// deja (exigence du Livrable 3 : purge au demarrage du client).
+/// @brief Cree le repertoire "images" s'il n'existe pas, ou le vide s'il
+/// existe deja (exigence du Livrable 3 : purge au demarrage du client).
 void prepareImagesDirectory() {
   namespace fs = std::filesystem;
   const fs::path dir(IMAGES_DIR);
@@ -33,6 +36,9 @@ void prepareImagesDirectory() {
 }
 } // namespace
 
+/// @brief Point d'entree : connecte le client au serveur, puis boucle sur
+/// la capture/l'affichage des images jusqu'a l'arret demande par l'usager.
+/// @return 0 en cas d'arret normal, 1 si la connexion au serveur echoue.
 int main() {
   Client::TcpClient client;
   Client::CycleStats stats;
