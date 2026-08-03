@@ -17,13 +17,21 @@
 
 namespace {
 
-// Qualite JPEG (0-100). Reduite depuis la valeur par defaut d'OpenCV (95)
-// pour diminuer le temps d'encodage et la taille transmise sur le reseau,
-// afin de respecter le cycle de 30 ms impose par le protocole.
+/// Qualite JPEG (0-100). Reduite depuis la valeur par defaut d'OpenCV (95)
+/// pour diminuer le temps d'encodage et la taille transmise sur le reseau,
+/// afin de respecter le cycle de 30 ms impose par le protocole.
 constexpr int JPEG_QUALITY = 85;
 
-// Envoie exactement 'size' octets, meme si send() les livre en plusieurs
-// morceaux (comportement normal des sockets TCP)
+/**
+ * @brief Envoie exactement @p size octets sur le socket @p fd.
+ *
+ * Boucle sur send() tant que necessaire, meme si les donnees sont livrees
+ * en plusieurs morceaux (comportement normal des sockets TCP).
+ * @param fd Descripteur du socket cible.
+ * @param data Pointeur vers les donnees a envoyer.
+ * @param size Nombre d'octets a envoyer.
+ * @return true si tous les octets ont ete envoyes, false en cas d'erreur.
+ */
 bool sendAll(int fd, const void *data, size_t size) {
   const auto *bytes = static_cast<const uint8_t *>(data);
   size_t sent = 0;

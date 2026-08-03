@@ -22,8 +22,14 @@ public:
   TcpServer() = default;
   ~TcpServer();
 
-  TcpServer(const TcpServer &) = delete;
-  TcpServer &operator=(const TcpServer &) = delete;
+  /// Constructeur par copie desactive (non copiable).
+  /// @param other Instance a copier (non utilise).
+  TcpServer(const TcpServer &other) = delete;
+
+  /// Affectation par copie desactivee (non copiable).
+  /// @param other Instance a copier (non utilise).
+  /// @return Reference vers l'instance courante (jamais atteint).
+  TcpServer &operator=(const TcpServer &other) = delete;
 
   /**
    * @brief Ignore SIGPIPE, cree le socket d'ecoute, applique SO_REUSEADDR,
@@ -63,11 +69,11 @@ private:
    */
   void sendFrame(int clientFd);
 
-  int _listenFd = -1;
-  sockaddr_in _serverAddr{};
-  Camera _camera;
-  GpioButton _button;
-  uint32_t _frameId = 0;
+  int _listenFd = -1;           ///< Descripteur du socket d'ecoute TCP/IP.
+  sockaddr_in _serverAddr{};    ///< Adresse et port sur lesquels le serveur ecoute.
+  Camera _camera;                ///< Camera USB utilisee pour la capture d'images.
+  GpioButton _button;             ///< Bouton-poussoir surveille via libgpiod.
+  uint32_t _frameId = 0;          ///< Compteur incremente a chaque image transmise.
 };
 
 } // namespace Server

@@ -19,8 +19,14 @@ class Camera {
 public:
   Camera() = default;
 
-  Camera(const Camera &) = delete;
-  Camera &operator=(const Camera &) = delete;
+  /// Constructeur par copie desactive (non copiable).
+  /// @param other Instance a copier (non utilise).
+  Camera(const Camera &other) = delete;
+
+  /// Affectation par copie desactivee (non copiable).
+  /// @param other Instance a copier (non utilise).
+  /// @return Reference vers l'instance courante (jamais atteint).
+  Camera &operator=(const Camera &other) = delete;
 
   /**
    * @brief Ouvre la camera USB et configure la resolution attendue.
@@ -35,7 +41,7 @@ public:
   std::optional<cv::Mat> captureFrame();
 
 private:
-  cv::VideoCapture _videoCapture;
+  cv::VideoCapture _videoCapture; ///< Flux de capture OpenCV vers la camera USB.
 };
 
 } // namespace Server

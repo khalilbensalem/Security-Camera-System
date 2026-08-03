@@ -11,7 +11,9 @@
 namespace Server {
 
 namespace {
+/// Periode d'echantillonnage de la ligne GPIO dans monitorLoop().
 constexpr auto POLL_INTERVAL = std::chrono::milliseconds(5);
+/// Delai minimal entre deux changements d'etat acceptes (anti-rebond).
 constexpr auto DEBOUNCE_DELAY = std::chrono::milliseconds(50);
 } // namespace
 

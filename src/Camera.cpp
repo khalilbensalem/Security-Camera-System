@@ -8,14 +8,20 @@
 #include <unistd.h>
 
 namespace {
-// Resolution et taux de rafraichissement imposes par l'enonce du livrable 2
+/// Largeur d'image imposee par l'enonce du livrable 2.
 constexpr int FRAME_WIDTH = 800;
+/// Hauteur d'image imposee par l'enonce du livrable 2.
 constexpr int FRAME_HEIGHT = 600;
+/// Taux de rafraichissement vise, en images par seconde.
 constexpr int FRAME_FPS = 30;
 
-// Redirige stderr vers /dev/null le temps de sa duree de vie, puis le
-// restaure. Masque les avertissements libjpeg benins emis lors du decodage
-// MJPG materiel de la camera (voir Camera::init()).
+/**
+ * @brief Redirige stderr vers /dev/null le temps de sa duree de vie.
+ *
+ * Masque les avertissements libjpeg benins emis lors du decodage MJPG
+ * materiel de la camera (voir Camera::init()), puis restaure stderr a la
+ * destruction de l'objet.
+ */
 class ScopedStderrSuppressor {
 
 public:
@@ -35,11 +41,17 @@ public:
     }
   }
 
-  ScopedStderrSuppressor(const ScopedStderrSuppressor &) = delete;
-  ScopedStderrSuppressor &operator=(const ScopedStderrSuppressor &) = delete;
+  /// Constructeur par copie desactive (non copiable).
+  /// @param other Instance a copier (non utilise).
+  ScopedStderrSuppressor(const ScopedStderrSuppressor &other) = delete;
+
+  /// Affectation par copie desactivee (non copiable).
+  /// @param other Instance a copier (non utilise).
+  /// @return Reference vers l'instance courante (jamais atteint).
+  ScopedStderrSuppressor &operator=(const ScopedStderrSuppressor &other) = delete;
 
 private:
-  int _savedStderr = -1;
+  int _savedStderr = -1; ///< Copie du descripteur stderr original, pour le restaurer.
 };
 
 } // namespace

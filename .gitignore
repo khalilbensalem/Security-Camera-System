@@ -7,9 +7,7 @@ build/
 *.exe
 
 # Documentation générée par Doxygen
-docs/
-html/
-latex/
+doxygen/
 
 # Fichiers temporaires d'éditeurs
 *.swp
