@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 
 namespace Protocol {
@@ -17,13 +18,20 @@ constexpr int CYCLE_INTERVAL_MS = 30;
 /// Delai maximal tolere pour la reception d'un message TCP/IP.
 constexpr int RECV_TIMEOUT_MS = 60;
 
+/// Duree minimale pendant laquelle un nouvel etat (NO_LIGHT, SENSOR_ERROR,
+/// FRAME_HDR) doit persister sans interruption avant d'etre transmis au
+/// client ; evite les oscillations rapides autour d'un seuil de luminosite.
+constexpr std::chrono::milliseconds STATE_DEBOUNCE{200};
+
 /// Codes de message echanges entre le client et le serveur.
 enum class MessageCode : uint8_t {
-  GetFrame = 1,    ///< Client -> Serveur : demande la capture d'une image.
-  Stop = 2,        ///< Client -> Serveur : demande d'arret du programme.
-  FrameHdr = 101,  ///< Serveur -> Client : en-tete d'une image transmise.
-  StopAck = 102,   ///< Serveur -> Client : confirmation d'arret.
+  GetFrame = 1,      ///< Client -> Serveur : demande la capture d'une image.
+  Stop = 2,          ///< Client -> Serveur : demande d'arret du programme.
+  FrameHdr = 101,    ///< Serveur -> Client : en-tete d'une image transmise.
+  StopAck = 102,     ///< Serveur -> Client : confirmation d'arret.
   ButtonPress = 103, ///< Serveur -> Client : appui detecte sur le bouton.
+  NoLight = 201,     ///< Serveur -> Client : luminosite ambiante insuffisante.
+  SensorError = 202, ///< Serveur -> Client : incoherence capteur/image.
 };
 
 } // namespace Protocol
