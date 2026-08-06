@@ -86,22 +86,30 @@ std::optional<Frame> TcpClient::requestFrame() {
     return std::nullopt;
 
   const auto messageCode = static_cast<Protocol::MessageCode>(header);
-  // On accepte desormais deux types de reponse valides a GET_FRAME :
-  // FRAME_HDR (cas normal) et BUTTON_PRESS (un appui a eu lieu cote
-  // serveur). Les deux partagent exactement la meme structure de message.
+
+  // Le frame_id est toujours transmis, peu importe l'etat rapporte par le
+  // serveur (Normal, BUTTON_PRESS, NO_LIGHT ou SENSOR_ERROR).
+  uint32_t frameIdNet = 0;
+  if (!receiveAll(&frameIdNet, sizeof(frameIdNet)))
+    return std::nullopt;
+  const uint32_t frameId = ntohl(frameIdNet);
+
+  if (messageCode == Protocol::MessageCode::NoLight) {
+    return Frame{frameId, cv::Mat(), FrameStatus::NoLight};
+  }
+  if (messageCode == Protocol::MessageCode::SensorError) {
+    return Frame{frameId, cv::Mat(), FrameStatus::SensorError};
+  }
   if (messageCode != Protocol::MessageCode::FrameHdr &&
       messageCode != Protocol::MessageCode::ButtonPress) {
     return std::nullopt;
   }
 
-  uint32_t frameIdNet = 0;
+  // FRAME_HDR et BUTTON_PRESS transmettent ensuite la taille puis les
+  // donnees de l'image JPEG.
   uint32_t jpegSizeNet = 0;
-  if (!receiveAll(&frameIdNet, sizeof(frameIdNet)))
-    return std::nullopt;
   if (!receiveAll(&jpegSizeNet, sizeof(jpegSizeNet)))
     return std::nullopt;
-
-  const uint32_t frameId = ntohl(frameIdNet);
   const uint32_t jpegSize = ntohl(jpegSizeNet);
 
   std::vector<uchar> jpegBuffer(jpegSize);
@@ -114,8 +122,10 @@ std::optional<Frame> TcpClient::requestFrame() {
     return std::nullopt;
   }
 
-  return Frame{frameId, image,
-               messageCode == Protocol::MessageCode::ButtonPress};
+  const auto status = messageCode == Protocol::MessageCode::ButtonPress
+                          ? FrameStatus::ButtonPress
+                          : FrameStatus::Normal;
+  return Frame{frameId, image, status};
 }
 
 void TcpClient::close() {

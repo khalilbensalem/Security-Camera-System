@@ -14,14 +14,25 @@
 namespace Client {
 
 /**
- * @brief Represente une image recue du serveur, avec son numero et une
- *        indication si elle provient d'un evenement bouton.
+ * @brief Indique la nature de la reponse du serveur a une requete
+ *        GET_FRAME.
+ */
+enum class FrameStatus {
+  Normal,      ///< Reponse FRAME_HDR : image normale.
+  ButtonPress, ///< Reponse BUTTON_PRESS : image liee a un appui bouton.
+  NoLight,     ///< Reponse NO_LIGHT : luminosite insuffisante, pas d'image.
+  SensorError, ///< Reponse SENSOR_ERROR : incoherence capteur/image, pas
+               ///< d'image.
+};
+
+/**
+ * @brief Represente la reponse du serveur a une requete GET_FRAME. L'image
+ *        n'est presente que lorsque status vaut Normal ou ButtonPress.
  */
 struct Frame {
   uint32_t frameId; ///< Numero de la frame, attribue par le serveur.
-  cv::Mat image;    ///< Image decodee (BGR) prete a etre affichee.
-  bool isButtonPress =
-      false; ///< true si cette frame provient d'un evenement BUTTON_PRESS.
+  cv::Mat image;    ///< Image decodee (BGR), vide si aucune image transmise.
+  FrameStatus status = FrameStatus::Normal; ///< Nature de la reponse recue.
 };
 
 /**
@@ -51,9 +62,10 @@ public:
   bool connectToServer(const std::string &serverIp);
 
   /**
-   * @brief Envoie GET_FRAME et recoit l'image complete (en-tete + JPEG).
-   *        La reponse peut etre FRAME_HDR (cas normal) ou BUTTON_PRESS
-   *        (un appui a eu lieu cote serveur), voir Frame::isButtonPress.
+   * @brief Envoie GET_FRAME et recoit la reponse du serveur.
+   *        La reponse peut etre FRAME_HDR ou BUTTON_PRESS (en-tete + JPEG),
+   *        ou NO_LIGHT / SENSOR_ERROR (aucune image transmise), voir
+   *        Frame::status.
    * @return La frame recue, ou std::nullopt en cas d'erreur.
    */
   std::optional<Frame> requestFrame();
