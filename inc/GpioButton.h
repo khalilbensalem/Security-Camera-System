@@ -50,11 +50,12 @@ private:
   /// applique l'anti-rebond et met _pressed a jour lors d'un appui detecte.
   void monitorLoop();
 
-  std::string _chipName;               ///< Nom du controleur GPIO (ex: "gpiochip1").
-  unsigned int _lineOffset = 0;        ///< Numero de la ligne correspondant au bouton.
-  std::atomic<bool> _pressed{false};   ///< Indique qu'un appui est en attente de consommation.
-  std::atomic<bool> _running{false};   ///< Controle l'execution de monitorLoop().
-  std::thread _thread;                 ///< Thread dedie a la surveillance du GPIO.
+  std::string _chipName;        ///< Nom du controleur GPIO (ex: "gpiochip1").
+  unsigned int _lineOffset = 0; ///< Numero de la ligne correspondant au bouton.
+  std::atomic<bool> _pressed{
+      false}; ///< Indique qu'un appui est en attente de consommation.
+  std::atomic<bool> _running{false}; ///< Controle l'execution de monitorLoop().
+  std::thread _thread; ///< Thread dedie a la surveillance du GPIO.
 };
 
 } // namespace Server

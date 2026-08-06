@@ -41,7 +41,8 @@ public:
   std::optional<cv::Mat> captureFrame();
 
 private:
-  cv::VideoCapture _videoCapture; ///< Flux de capture OpenCV vers la camera USB.
+  cv::VideoCapture
+      _videoCapture; ///< Flux de capture OpenCV vers la camera USB.
 };
 
 } // namespace Server

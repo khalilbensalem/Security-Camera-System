@@ -48,10 +48,12 @@ public:
   /// Affectation par copie desactivee (non copiable).
   /// @param other Instance a copier (non utilise).
   /// @return Reference vers l'instance courante (jamais atteint).
-  ScopedStderrSuppressor &operator=(const ScopedStderrSuppressor &other) = delete;
+  ScopedStderrSuppressor &
+  operator=(const ScopedStderrSuppressor &other) = delete;
 
 private:
-  int _savedStderr = -1; ///< Copie du descripteur stderr original, pour le restaurer.
+  int _savedStderr =
+      -1; ///< Copie du descripteur stderr original, pour le restaurer.
 };
 
 } // namespace
