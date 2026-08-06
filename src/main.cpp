@@ -20,6 +20,11 @@ constexpr const char *SERVER_IP = "192.168.7.2";
 constexpr const char *WINDOW_NAME = "Surveillance video";
 /// Repertoire ou sont sauvegardees les images capturees sur appui bouton.
 constexpr const char *IMAGES_DIR = "images";
+/// Resolution des images transmises par le serveur (Livrable 2), utilisee
+/// pour construire les images d'avertissement NO_LIGHT / SENSOR_ERROR qui
+/// ne contiennent pas d'image.
+constexpr int FRAME_WIDTH = 800;
+constexpr int FRAME_HEIGHT = 600;
 
 /// @brief Cree le repertoire "images" s'il n'existe pas, ou le vide s'il
 /// existe deja (exigence du Livrable 3 : purge au demarrage du client).
@@ -33,6 +38,20 @@ void prepareImagesDirectory() {
   } else {
     fs::create_directories(dir);
   }
+}
+
+/// @brief Construit une image noire avec un message centre, utilisee pour
+/// signaler les etats NO_LIGHT et SENSOR_ERROR (Livrable 4).
+cv::Mat makeWarningFrame(const std::string &message) {
+  cv::Mat frame(FRAME_HEIGHT, FRAME_WIDTH, CV_8UC3, cv::Scalar(0, 0, 0));
+  int baseline = 0;
+  const auto textSize =
+      cv::getTextSize(message, cv::FONT_HERSHEY_SIMPLEX, 1.0, 2, &baseline);
+  const cv::Point origin((FRAME_WIDTH - textSize.width) / 2,
+                         (FRAME_HEIGHT + textSize.height) / 2);
+  cv::putText(frame, message, origin, cv::FONT_HERSHEY_SIMPLEX, 1.0,
+              cv::Scalar(0, 0, 255), 2);
+  return frame;
 }
 } // namespace
 
@@ -57,21 +76,33 @@ int main() {
 
     const auto frame = client.requestFrame();
     if (frame) {
-      // Affiche le numero de la frame dans le coin superieur gauche
-      cv::putText(frame->image, "Frame: " + std::to_string(frame->frameId),
-                  cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0,
-                  cv::Scalar(0, 255, 0), 2);
+      switch (frame->status) {
+      case Client::FrameStatus::Normal:
+      case Client::FrameStatus::ButtonPress:
+        // Affiche le numero de la frame dans le coin superieur gauche
+        cv::putText(frame->image, "Frame: " + std::to_string(frame->frameId),
+                    cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                    cv::Scalar(0, 255, 0), 2);
+        cv::imshow(WINDOW_NAME, frame->image);
 
-      cv::imshow(WINDOW_NAME, frame->image);
+        // Un appui sur le bouton a ete signale par le serveur : on
+        // sauvegarde l'image en plus de l'afficher normalement.
+        if (frame->status == Client::FrameStatus::ButtonPress) {
+          const std::string filename = std::string(IMAGES_DIR) +
+                                       "/capture_frame_" +
+                                       std::to_string(frame->frameId) + ".jpg";
+          cv::imwrite(filename, frame->image);
+          std::cout << "Image sauvegardee : " << filename << std::endl;
+        }
+        break;
 
-      // Un appui sur le bouton a ete signale par le serveur : on
-      // sauvegarde l'image en plus de l'afficher normalement.
-      if (frame->isButtonPress) {
-        const std::string filename = std::string(IMAGES_DIR) +
-                                     "/capture_frame_" +
-                                     std::to_string(frame->frameId) + ".jpg";
-        cv::imwrite(filename, frame->image);
-        std::cout << "Image sauvegardee : " << filename << std::endl;
+      case Client::FrameStatus::NoLight:
+        cv::imshow(WINDOW_NAME, makeWarningFrame("Lumiere insuffisante"));
+        break;
+
+      case Client::FrameStatus::SensorError:
+        cv::imshow(WINDOW_NAME, makeWarningFrame("Capteur errone"));
+        break;
       }
     }
 
