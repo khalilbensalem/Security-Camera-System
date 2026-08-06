@@ -43,7 +43,11 @@ public:
 
   /**
    * @brief Lit la valeur brute courante du canal ADC.
-   * @return La valeur lue, ou std::nullopt en cas d'erreur de lecture.
+   *
+   * Le driver meson-gxbb-saradc de l'Odroid-C2 peut retourner EINVAL de
+   * facon transitoire lors de lectures rapprochees ; readRaw() reessaie
+   * automatiquement quelques fois avant d'abandonner (voir LightSensor.cpp).
+   * @return La valeur lue, ou std::nullopt en cas d'echec persistant.
    */
   std::optional<int> readRaw() const;
 

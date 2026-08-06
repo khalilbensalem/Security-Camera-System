@@ -5,10 +5,12 @@
 #include "LightSensor.h"
 
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <dirent.h>
 #include <fcntl.h>
 #include <iostream>
+#include <thread>
 #include <unistd.h>
 
 namespace Server {
@@ -29,6 +31,16 @@ constexpr auto VOLTAGE_CHANNEL_FILE = "in_voltage0_raw";
 /// sombre. Place a mi-chemin entre la plage eclairee mesuree (~890-910) et
 /// la plage occultee mesuree (~1020), avec marge contre le bruit de mesure.
 constexpr int NO_LIGHT_THRESHOLD = 960;
+
+/// Nombre maximal de tentatives de lecture en cas d'erreur EINVAL. Le
+/// driver meson-gxbb-saradc de l'Odroid-C2 rejette occasionnellement une
+/// conversion ADC de facon transitoire (sans panne materielle reelle) ;
+/// quelques tentatives suffisent a absorber ce cas.
+constexpr int MAX_READ_ATTEMPTS = 3;
+
+/// Delai entre deux tentatives de lecture, pour laisser au convertisseur
+/// le temps de se stabiliser avant de reessayer.
+constexpr auto READ_RETRY_DELAY = std::chrono::milliseconds(2);
 
 } // namespace
 
@@ -70,31 +82,42 @@ std::optional<int> LightSensor::readRaw() const {
   // attributs sysfs de l'IIO doivent etre relus par un open() frais a
   // chaque fois (pas de seek), et cette approche donne acces a errno pour
   // diagnostiquer precisement un echec (permission, device non pret, etc.).
-  const int fd = open(_rawPath.c_str(), O_RDONLY);
-  if (fd < 0) {
-    std::cerr << "LightSensor: open() a echoue sur " << _rawPath << " : "
-              << std::strerror(errno) << std::endl;
-    return std::nullopt;
-  }
+  for (int attempt = 1; attempt <= MAX_READ_ATTEMPTS; ++attempt) {
+    const int fd = open(_rawPath.c_str(), O_RDONLY);
+    if (fd < 0) {
+      std::cerr << "LightSensor: open() a echoue sur " << _rawPath << " : "
+                << std::strerror(errno) << std::endl;
+      return std::nullopt;
+    }
 
-  char buffer[32] = {};
-  const auto bytesRead = read(fd, buffer, sizeof(buffer) - 1);
-  const int readErrno = errno;
-  close(fd);
+    char buffer[32] = {};
+    const auto bytesRead = read(fd, buffer, sizeof(buffer) - 1);
+    const int readErrno = errno;
+    close(fd);
 
-  if (bytesRead <= 0) {
+    if (bytesRead > 0) {
+      try {
+        return std::stoi(std::string(buffer, static_cast<size_t>(bytesRead)));
+      } catch (const std::exception &e) {
+        std::cerr << "LightSensor: valeur illisible sur " << _rawPath << " (\""
+                  << buffer << "\") : " << e.what() << std::endl;
+        return std::nullopt;
+      }
+    }
+
+    // EINVAL : erreur transitoire connue du driver meson-gxbb-saradc lors
+    // de lectures rapprochees. On reessaie avant d'abandonner.
+    if (readErrno == EINVAL && attempt < MAX_READ_ATTEMPTS) {
+      std::this_thread::sleep_for(READ_RETRY_DELAY);
+      continue;
+    }
+
     std::cerr << "LightSensor: read() a echoue sur " << _rawPath << " : "
               << std::strerror(readErrno) << std::endl;
     return std::nullopt;
   }
 
-  try {
-    return std::stoi(std::string(buffer, static_cast<size_t>(bytesRead)));
-  } catch (const std::exception &e) {
-    std::cerr << "LightSensor: valeur illisible sur " << _rawPath << " (\""
-              << buffer << "\") : " << e.what() << std::endl;
-    return std::nullopt;
-  }
+  return std::nullopt;
 }
 
 bool LightSensor::isDark() const {
