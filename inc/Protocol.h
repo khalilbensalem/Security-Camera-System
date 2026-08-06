@@ -24,6 +24,10 @@ enum class MessageCode : uint8_t {
   FrameHdr = 101,    ///< Serveur -> Client : en-tete d'une image transmise
   StopAck = 102,     ///< Serveur -> Client : confirmation d'arret du programme
   ButtonPress = 103, ///< Serveur -> Client : appui detecte sur le bouton
+  NoLight = 201,     ///< Serveur -> Client : luminosite insuffisante, aucune
+                     ///< image transmise
+  SensorError = 202, ///< Serveur -> Client : incoherence capteur/image,
+                     ///< aucune image transmise
 };
 
 } // namespace Protocol
