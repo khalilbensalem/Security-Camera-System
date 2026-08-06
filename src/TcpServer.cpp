@@ -173,8 +173,6 @@ TcpServer::SystemState TcpServer::updateConfirmedState(SystemState instant) {
     const auto elapsed = std::chrono::steady_clock::now() - _pendingSince;
     if (elapsed >= Protocol::STATE_DEBOUNCE &&
         _pendingState != _confirmedState) {
-      std::cout << "Etat : " << stateName(_confirmedState) << " -> "
-                << stateName(_pendingState) << std::endl;
       _confirmedState = _pendingState;
     }
   } else {
