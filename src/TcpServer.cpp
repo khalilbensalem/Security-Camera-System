@@ -22,6 +22,12 @@ namespace {
 /// afin de respecter le cycle de 30 ms impose par le protocole.
 constexpr int JPEG_QUALITY = 85;
 
+/// Sous ce seuil (intensite moyenne en niveaux de gris, 0-255), l'image
+/// capturee est consideree comme sombre. Metrique simple (luminosite
+/// moyenne de la scene) suffisante pour detecter une absence de lumiere ou
+/// un cache devant l'objectif, sans le cout d'une analyse d'histogramme.
+constexpr double IMAGE_DARK_THRESHOLD = 40.0;
+
 /**
  * @brief Envoie exactement @p size octets sur le socket @p fd.
  *
@@ -66,6 +72,10 @@ bool TcpServer::init() {
   }
 
   if (!_button.init("gpiochip1", 92)) {
+    return false;
+  }
+
+  if (!_lightSensor.init()) {
     return false;
   }
 
@@ -128,10 +138,85 @@ std::optional<int> TcpServer::acceptClient() const {
   return clientFd;
 }
 
+TcpServer::SystemState
+TcpServer::computeInstantState(const cv::Mat &frame) const {
+  cv::Mat gray;
+  cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+  const double meanBrightness = cv::mean(gray)[0];
+
+  const bool imageIsDark = meanBrightness < IMAGE_DARK_THRESHOLD;
+  const bool sensorIsDark = _lightSensor.isDark();
+
+  if (sensorIsDark && imageIsDark) {
+    return SystemState::NoLight;
+  }
+  if (sensorIsDark != imageIsDark) {
+    return SystemState::SensorError;
+  }
+  return SystemState::Normal;
+}
+
+const char *TcpServer::stateName(SystemState state) {
+  switch (state) {
+  case SystemState::Normal:
+    return "NORMAL";
+  case SystemState::NoLight:
+    return "NO_LIGHT";
+  case SystemState::SensorError:
+    return "SENSOR_ERROR";
+  }
+  return "?";
+}
+
+TcpServer::SystemState TcpServer::updateConfirmedState(SystemState instant) {
+  if (instant == _pendingState) {
+    const auto elapsed = std::chrono::steady_clock::now() - _pendingSince;
+    if (elapsed >= Protocol::STATE_DEBOUNCE &&
+        _pendingState != _confirmedState) {
+      std::cout << "Etat : " << stateName(_confirmedState) << " -> "
+                << stateName(_pendingState) << std::endl;
+      _confirmedState = _pendingState;
+    }
+  } else {
+    _pendingState = instant;
+    _pendingSince = std::chrono::steady_clock::now();
+  }
+  return _confirmedState;
+}
+
 void TcpServer::sendFrame(int clientFd) {
   // Capture d'une image depuis la camera
   const auto frame = _camera.captureFrame();
   if (!frame) {
+    return;
+  }
+
+  const SystemState state =
+      updateConfirmedState(computeInstantState(frame.value()));
+
+  ++_frameId;
+  const uint32_t frameIdNet = htonl(_frameId);
+
+  // Un appui est consomme une seule fois par cycle, qu'il soit utilise ou
+  // non : cela garantit qu'un appui survenu pendant un etat NO_LIGHT ou
+  // SENSOR_ERROR ne peut pas s'accumuler et declencher une sauvegarde
+  // tardive une fois l'etat revenu a la normale (ces etats sont
+  // prioritaires sur BUTTON_PRESS, cf. enonce du Livrable 4).
+  const bool buttonPressed = _button.consumePressEvent();
+
+  if (state != SystemState::Normal) {
+    const auto messageCode = state == SystemState::NoLight
+                                 ? Protocol::MessageCode::NoLight
+                                 : Protocol::MessageCode::SensorError;
+    const auto header = static_cast<uint8_t>(messageCode);
+
+    std::array<uint8_t, sizeof(header) + sizeof(frameIdNet)> headerBuffer{};
+    size_t offset = 0;
+    std::memcpy(headerBuffer.data() + offset, &header, sizeof(header));
+    offset += sizeof(header);
+    std::memcpy(headerBuffer.data() + offset, &frameIdNet, sizeof(frameIdNet));
+
+    sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
     return;
   }
 
@@ -140,17 +225,12 @@ void TcpServer::sendFrame(int clientFd) {
   const std::vector<int> jpegParams{cv::IMWRITE_JPEG_QUALITY, JPEG_QUALITY};
   cv::imencode(".jpg", frame.value(), jpegBuffer, jpegParams);
 
-  ++_frameId;
-
   // Si un appui bouton est en attente, on remplace FRAME_HDR par
   // BUTTON_PRESS pour cette frame (meme structure de message, seul le
-  // code de commande change). consumePressEvent() reinitialise l'etat,
-  // garantissant qu'un appui ne declenche qu'une seule sauvegarde.
-  const auto messageCode = _button.consumePressEvent()
-                               ? Protocol::MessageCode::ButtonPress
-                               : Protocol::MessageCode::FrameHdr;
+  // code de commande change).
+  const auto messageCode = buttonPressed ? Protocol::MessageCode::ButtonPress
+                                         : Protocol::MessageCode::FrameHdr;
   const auto header = static_cast<uint8_t>(messageCode);
-  const uint32_t frameIdNet = htonl(_frameId);
   const uint32_t jpegSizeNet = htonl(static_cast<uint32_t>(jpegBuffer.size()));
 
   std::array<uint8_t, sizeof(header) + sizeof(frameIdNet) + sizeof(jpegSizeNet)>
