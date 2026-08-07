@@ -20,10 +20,13 @@ constexpr const char *SERVER_IP = "192.168.7.2";
 constexpr const char *WINDOW_NAME = "Surveillance video";
 /// Repertoire ou sont sauvegardees les images capturees sur appui bouton.
 constexpr const char *IMAGES_DIR = "images";
-/// Resolution des images transmises par le serveur (Livrable 2), utilisee
-/// pour construire les images d'avertissement NO_LIGHT / SENSOR_ERROR qui
-/// ne contiennent pas d'image.
+/// Largeur des images transmises par le serveur (Livrable 2), utilisee pour
+/// construire les images d'avertissement NO_LIGHT / SENSOR_ERROR qui ne
+/// contiennent pas d'image.
 constexpr int FRAME_WIDTH = 800;
+/// Hauteur des images transmises par le serveur (Livrable 2), utilisee pour
+/// construire les images d'avertissement NO_LIGHT / SENSOR_ERROR qui ne
+/// contiennent pas d'image.
 constexpr int FRAME_HEIGHT = 600;
 
 /// @brief Cree le repertoire "images" s'il n'existe pas, ou le vide s'il
@@ -42,6 +45,9 @@ void prepareImagesDirectory() {
 
 /// @brief Construit une image noire avec un message centre, utilisee pour
 /// signaler les etats NO_LIGHT et SENSOR_ERROR (Livrable 4).
+/// @param message Le texte d'avertissement a afficher, centre dans l'image.
+/// @return L'image noire (FRAME_WIDTH x FRAME_HEIGHT) avec le message
+/// centre en rouge.
 cv::Mat makeWarningFrame(const std::string &message) {
   cv::Mat frame(FRAME_HEIGHT, FRAME_WIDTH, CV_8UC3, cv::Scalar(0, 0, 0));
   int baseline = 0;
