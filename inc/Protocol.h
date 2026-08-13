@@ -24,6 +24,13 @@ constexpr int RECV_TIMEOUT_MS = 60;
 /// jamais detectee par le mecanisme d'erreur habituel des sockets.
 constexpr int SEND_TIMEOUT_MS = 500;
 
+/// Duree d'inactivite (aucun message recu) au-dela de laquelle le client
+/// courant est considere comme deconnecte, meme en l'absence de FIN/RST
+/// (ex: perte physique du lien reseau). Grande devant le cycle client de
+/// 30 ms pour tolerer la gigue normale, mais petite devant la contrainte de
+/// reprise en moins de 10 s du Livrable 5.
+constexpr std::chrono::milliseconds CLIENT_IDLE_TIMEOUT{1000};
+
 /// Duree minimale pendant laquelle un nouvel etat (NO_LIGHT, SENSOR_ERROR,
 /// FRAME_HDR) doit persister sans interruption avant d'etre transmis au
 /// client ; evite les oscillations rapides autour d'un seuil de luminosite.

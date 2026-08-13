@@ -250,6 +250,11 @@ bool TcpServer::sendFrame(int clientFd) {
 }
 
 bool TcpServer::handleClient(int clientFd) {
+  // Reference pour detecter une perte de lien silencieuse (cable debranche) :
+  // aucun FIN/RST n'est genere dans ce cas, seule l'absence prolongee de
+  // messages recus permet de la reconnaitre.
+  auto lastActivity = std::chrono::steady_clock::now();
+
   while (true) {
     uint8_t message = 0;
     const auto received = recv(clientFd, &message, sizeof(message), 0);
@@ -261,14 +266,22 @@ bool TcpServer::handleClient(int clientFd) {
     }
 
     if (received < 0) {
-      // Timeout : aucun message recu durant ce cycle, on continue simplement
+      // Timeout : aucun message recu durant ce cycle
       if (errno == EWOULDBLOCK || errno == EAGAIN) {
+        const auto idleFor = std::chrono::steady_clock::now() - lastActivity;
+        if (idleFor >= Protocol::CLIENT_IDLE_TIMEOUT) {
+          std::cout << "Client deconnecte (inactivite, lien probablement "
+                       "rompu)"
+                    << std::endl;
+          return false;
+        }
         continue;
       }
       std::cerr << "Erreur recv() : " << std::strerror(errno) << std::endl;
       return false;
     }
 
+    lastActivity = std::chrono::steady_clock::now();
     const auto code = static_cast<Protocol::MessageCode>(message);
 
     if (code == Protocol::MessageCode::GetFrame) {
