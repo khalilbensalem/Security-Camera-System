@@ -59,6 +59,11 @@ cv::Mat makeWarningFrame(const std::string &message) {
               cv::Scalar(0, 0, 255), 2);
   return frame;
 }
+/// @brief Etat de connexion du client au serveur (Livrable 5).
+enum class ConnectionState {
+  Connected,    ///< Connexion active, les GET_FRAME sont envoyes normalement.
+  Disconnected, ///< Connexion perdue, en attente de reconnexion.
+};
 } // namespace
 
 /// @brief Point d'entree : connecte le client au serveur, puis boucle sur
@@ -76,40 +81,44 @@ int main() {
 
   cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
 
+  ConnectionState connState = ConnectionState::Connected;
+
   bool running = true;
   while (running) {
     const auto cycleStart = std::chrono::steady_clock::now();
 
-    const auto frame = client.requestFrame();
-    if (frame) {
-      switch (frame->status) {
-      case Client::FrameStatus::Normal:
-      case Client::FrameStatus::ButtonPress:
-        // Affiche le numero de la frame dans le coin superieur gauche
-        cv::putText(frame->image, "Frame: " + std::to_string(frame->frameId),
-                    cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0,
-                    cv::Scalar(0, 255, 0), 2);
-        cv::imshow(WINDOW_NAME, frame->image);
+    if (connState == ConnectionState::Connected) {
+      const auto frame = client.requestFrame();
+      if (frame) {
+        switch (frame->status) {
+        case Client::FrameStatus::Normal:
+        case Client::FrameStatus::ButtonPress:
+          cv::putText(frame->image, "Frame: " + std::to_string(frame->frameId),
+                      cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                      cv::Scalar(0, 255, 0), 2);
+          cv::imshow(WINDOW_NAME, frame->image);
 
-        // Un appui sur le bouton a ete signale par le serveur : on
-        // sauvegarde l'image en plus de l'afficher normalement.
-        if (frame->status == Client::FrameStatus::ButtonPress) {
-          const std::string filename = std::string(IMAGES_DIR) +
-                                       "/capture_frame_" +
-                                       std::to_string(frame->frameId) + ".jpg";
-          cv::imwrite(filename, frame->image);
-          std::cout << "Image sauvegardee : " << filename << std::endl;
+          if (frame->status == Client::FrameStatus::ButtonPress) {
+            const std::string filename =
+                std::string(IMAGES_DIR) + "/capture_frame_" +
+                std::to_string(frame->frameId) + ".jpg";
+            cv::imwrite(filename, frame->image);
+            std::cout << "Image sauvegardee : " << filename << std::endl;
+          }
+          break;
+
+        case Client::FrameStatus::NoLight:
+          cv::imshow(WINDOW_NAME, makeWarningFrame("Lumiere insuffisante"));
+          break;
+
+        case Client::FrameStatus::SensorError:
+          cv::imshow(WINDOW_NAME, makeWarningFrame("Capteur errone"));
+          break;
         }
-        break;
-
-      case Client::FrameStatus::NoLight:
-        cv::imshow(WINDOW_NAME, makeWarningFrame("Lumiere insuffisante"));
-        break;
-
-      case Client::FrameStatus::SensorError:
-        cv::imshow(WINDOW_NAME, makeWarningFrame("Capteur errone"));
-        break;
       }
+      // La detection d'une perte de connexion sera ajoutee au commit suivant.
+    } else {
+      // avancer cette section
     }
 
     // Soustrait le temps deja ecoule (requete + affichage) du delai
