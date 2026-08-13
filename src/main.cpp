@@ -117,16 +117,20 @@ int main() {
           cv::imshow(WINDOW_NAME, makeWarningFrame("Capteur errone"));
           break;
         }
+      } else {
+        // requestFrame() a echoue (timeout recv, send echoue, etc.) : on
+        // tolere quelques echecs isoles (gigue reseau normale) avant de
+        // declarer la connexion perdue.
+        const auto idleFor = cycleStart - lastFrameSuccessTime;
+        if (idleFor >=
+            std::chrono::milliseconds(Protocol::CONNECTION_LOST_TIMEOUT_MS)) {
+          std::cout << "Connexion perdue" << std::endl;
+          client.close();
+          connState = ConnectionState::Disconnected;
+        }
       }
-      // La detection d'une perte de connexion sera ajoutee au commit suivant.
     } else {
-      const auto idleFor = cycleStart - lastFrameSuccessTime;
-      if (idleFor >=
-          std::chrono::milliseconds(Protocol::CONNECTION_LOST_TIMEOUT_MS)) {
-        std::cout << "Connexion perdue" << std::endl;
-        client.close();
-        connState = ConnectionState::Disconnected;
-      }
+      // affichage CONNEXION PERDUE et la reconnexion a faire ici
     }
 
     // Soustrait le temps deja ecoule (requete + affichage) du delai
