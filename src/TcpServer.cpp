@@ -99,7 +99,10 @@ bool TcpServer::init() {
     return false;
   }
 
-  if (listen(_listenFd, 1) < 0) {
+  // Backlog > 1 : pendant la fenetre de detection d'une connexion morte
+  // (CLIENT_IDLE_TIMEOUT), le serveur n'a pas encore appele accept() a
+  // nouveau alors que le client retente une connexion toutes les 500 ms
+  if (listen(_listenFd, 4) < 0) {
     std::cerr << "Erreur listen() : " << std::strerror(errno) << std::endl;
     return false;
   }
