@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 
 namespace Protocol {
@@ -16,6 +17,12 @@ constexpr int CYCLE_INTERVAL_MS = 30;
 
 /// Delai maximal tolere pour la reception d'un message TCP/IP
 constexpr int RECV_TIMEOUT_MS = 60;
+
+/// Duree pendant laquelle aucune reponse du serveur a GET_FRAME n'est
+/// toleree avant de declarer la connexion perdue. Superieure au
+/// timeout de reception (RECV_TIMEOUT_MS) pour absorber la gigue normale du
+/// reseau sans declencher de fausses alertes.
+constexpr int CONNECTION_LOST_TIMEOUT_MS = 300;
 
 /// Codes de message echanges entre le client et le serveur
 enum class MessageCode : uint8_t {

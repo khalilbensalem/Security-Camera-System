@@ -82,6 +82,7 @@ int main() {
   cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
 
   ConnectionState connState = ConnectionState::Connected;
+  auto lastFrameSuccessTime = std::chrono::steady_clock::now();
 
   bool running = true;
   while (running) {
@@ -90,6 +91,7 @@ int main() {
     if (connState == ConnectionState::Connected) {
       const auto frame = client.requestFrame();
       if (frame) {
+        lastFrameSuccessTime = cycleStart;
         switch (frame->status) {
         case Client::FrameStatus::Normal:
         case Client::FrameStatus::ButtonPress:
@@ -118,7 +120,13 @@ int main() {
       }
       // La detection d'une perte de connexion sera ajoutee au commit suivant.
     } else {
-      // avancer cette section
+      const auto idleFor = cycleStart - lastFrameSuccessTime;
+      if (idleFor >=
+          std::chrono::milliseconds(Protocol::CONNECTION_LOST_TIMEOUT_MS)) {
+        std::cout << "Connexion perdue" << std::endl;
+        client.close();
+        connState = ConnectionState::Disconnected;
+      }
     }
 
     // Soustrait le temps deja ecoule (requete + affichage) du delai
