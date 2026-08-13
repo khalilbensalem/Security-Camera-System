@@ -24,6 +24,14 @@ constexpr int RECV_TIMEOUT_MS = 60;
 /// reseau sans declencher de fausses alertes.
 constexpr int CONNECTION_LOST_TIMEOUT_MS = 300;
 
+/// Intervalle entre deux tentatives de reconnexion automatique lorsque la
+/// connexion est perdue.
+constexpr int RECONNECT_INTERVAL_MS = 500;
+
+/// Delai maximal accorde a une tentative de connexion non bloquante avant de
+/// l'abandonner, pour respecter la cadence de 500 ms entre deux tentatives.
+constexpr int RECONNECT_ATTEMPT_TIMEOUT_MS = 400;
+
 /// Codes de message echanges entre le client et le serveur
 enum class MessageCode : uint8_t {
   GetFrame = 1,      ///< Client -> Serveur : demande la capture d'une image

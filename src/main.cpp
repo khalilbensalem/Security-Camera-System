@@ -83,6 +83,7 @@ int main() {
 
   ConnectionState connState = ConnectionState::Connected;
   auto lastFrameSuccessTime = std::chrono::steady_clock::now();
+  auto lastReconnectAttempt = std::chrono::steady_clock::now();
 
   bool running = true;
   while (running) {
@@ -127,9 +128,18 @@ int main() {
           std::cout << "Connexion perdue" << std::endl;
           client.close();
           connState = ConnectionState::Disconnected;
+          lastReconnectAttempt = cycleStart;
         }
       }
     } else {
+      if (cycleStart - lastReconnectAttempt >=
+          std::chrono::milliseconds(Protocol::RECONNECT_INTERVAL_MS)) {
+        lastReconnectAttempt = cycleStart;
+        if (client.tryReconnect(SERVER_IP)) {
+          connState = ConnectionState::Connected;
+          lastFrameSuccessTime = cycleStart;
+        }
+      }
       cv::imshow(WINDOW_NAME, makeWarningFrame("CONNEXION PERDUE"));
     }
 

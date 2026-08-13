@@ -7,7 +7,9 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
 #include <iostream>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -37,12 +39,82 @@ bool TcpClient::connectToServer(const std::string &serverIp) {
     return false;
   }
 
-  timeval timeout{};
-  timeout.tv_sec = 0;
-  timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
-  setsockopt(_socketFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+  configureRecvTimeout();
 
   std::cout << "Connecte au serveur " << serverIp << ":" << Protocol::PORT
+            << std::endl;
+  return true;
+}
+
+void TcpClient::configureRecvTimeout() {
+  timeval recvTimeout{};
+  recvTimeout.tv_sec = 0;
+  recvTimeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
+  setsockopt(_socketFd, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout,
+             sizeof(recvTimeout));
+}
+
+bool TcpClient::tryReconnect(const std::string &serverIp) {
+  close(); // s'assure qu'aucun ancien descripteur ne traine
+
+  _socketFd = socket(AF_INET, SOCK_STREAM, 0);
+  if (_socketFd < 0) {
+    return false;
+  }
+
+  // Socket non bloquant le temps du connect() : sur un lien mort (cable
+  // debranche), un connect() bloquant peut prendre plusieurs secondes avant
+  // d'echouer, ce qui empecherait de respecter la cadence de 500 ms entre
+  // deux tentatives.
+  const int flags = fcntl(_socketFd, F_GETFL, 0);
+  fcntl(_socketFd, F_SETFL, flags | O_NONBLOCK);
+
+  sockaddr_in serverAddr{};
+  serverAddr.sin_family = AF_INET;
+  serverAddr.sin_port = htons(Protocol::PORT);
+  if (inet_pton(AF_INET, serverIp.c_str(), &serverAddr.sin_addr) <= 0) {
+    close();
+    return false;
+  }
+
+  const auto connectResult = connect(
+      _socketFd, reinterpret_cast<sockaddr *>(&serverAddr), sizeof(serverAddr));
+  if (connectResult < 0 && errno != EINPROGRESS) {
+    close();
+    return false;
+  }
+
+  if (connectResult < 0) {
+    // Connexion en cours (EINPROGRESS) : on attend au maximum
+    // RECONNECT_ATTEMPT_TIMEOUT_MS pour savoir si elle aboutit.
+    fd_set writeSet;
+    FD_ZERO(&writeSet);
+    FD_SET(_socketFd, &writeSet);
+    timeval selectTimeout{};
+    selectTimeout.tv_sec = 0;
+    selectTimeout.tv_usec = Protocol::RECONNECT_ATTEMPT_TIMEOUT_MS * 1000;
+
+    const auto selectResult =
+        select(_socketFd + 1, nullptr, &writeSet, nullptr, &selectTimeout);
+    if (selectResult <= 0) {
+      close();
+      return false;
+    }
+
+    int socketError = 0;
+    socklen_t errorLen = sizeof(socketError);
+    getsockopt(_socketFd, SOL_SOCKET, SO_ERROR, &socketError, &errorLen);
+    if (socketError != 0) {
+      close();
+      return false;
+    }
+  }
+
+  // Connexion etablie : restaure le mode bloquant et le timeout habituel.
+  fcntl(_socketFd, F_SETFL, flags);
+  configureRecvTimeout();
+
+  std::cout << "Reconnecte au serveur " << serverIp << ":" << Protocol::PORT
             << std::endl;
   return true;
 }

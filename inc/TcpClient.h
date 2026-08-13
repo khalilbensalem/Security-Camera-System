@@ -62,6 +62,17 @@ public:
   bool connectToServer(const std::string &serverIp);
 
   /**
+   * @brief Tente une seule fois de se (re)connecter au serveur, sans jamais
+   *        bloquer plus de Protocol::RECONNECT_ATTEMPT_TIMEOUT_MS (Livrable 5).
+   *        Contrairement a connectToServer(), un echec est attendu et normal
+   *        ici (le serveur peut simplement ne pas encore etre revenu) : ne
+   *        journalise donc pas d'erreur, l'appelant reessaie plus tard.
+   * @param serverIp Adresse IP du serveur (Odroid-C2).
+   * @return true si la connexion a reussi, false sinon.
+   */
+  bool tryReconnect(const std::string &serverIp);
+
+  /**
    * @brief Envoie GET_FRAME et recoit la reponse du serveur.
    *        La reponse peut etre FRAME_HDR ou BUTTON_PRESS (en-tete + JPEG),
    *        ou NO_LIGHT / SENSOR_ERROR (aucune image transmise), voir
@@ -85,6 +96,12 @@ public:
   void close();
 
 private:
+  /**
+   * @brief Applique le timeout de reception standard (RECV_TIMEOUT_MS) au
+   *        socket connecte courant.
+   */
+  void configureRecvTimeout();
+
   /**
    * @brief Recoit exactement 'size' octets, meme si recv() les livre en
    *        plusieurs morceaux.
