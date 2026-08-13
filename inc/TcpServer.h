@@ -90,8 +90,11 @@ private:
    * complet (FRAME_HDR ou BUTTON_PRESS, frame_id, jpeg_size) suivi des
    * donnees.
    * @param clientFd Descripteur du socket client.
+   * @return false si une transmission reseau a echoue (connexion probablement
+   *         perdue), true sinon (y compris si la capture d'image a echoue,
+   *         ce qui n'indique pas un probleme de connexion).
    */
-  void sendFrame(int clientFd);
+  bool sendFrame(int clientFd);
 
   /**
    * @brief Calcule l'etat instantane (non filtre) a partir de l'image

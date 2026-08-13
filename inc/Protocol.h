@@ -18,6 +18,12 @@ constexpr int CYCLE_INTERVAL_MS = 30;
 /// Delai maximal tolere pour la reception d'un message TCP/IP.
 constexpr int RECV_TIMEOUT_MS = 60;
 
+/// Delai maximal tolere pour l'envoi d'un message TCP/IP. Borne le temps de
+/// blocage de send() si le pair devient injoignable (ex: cable Ethernet
+/// debranche), situation qui ne genere ni FIN ni RST et ne serait sinon
+/// jamais detectee par le mecanisme d'erreur habituel des sockets.
+constexpr int SEND_TIMEOUT_MS = 500;
+
 /// Duree minimale pendant laquelle un nouvel etat (NO_LIGHT, SENSOR_ERROR,
 /// FRAME_HDR) doit persister sans interruption avant d'etre transmis au
 /// client ; evite les oscillations rapides autour d'un seuil de luminosite.

@@ -64,7 +64,7 @@ TcpServer::~TcpServer() {
 bool TcpServer::init() {
   // Ignore SIGPIPE : sinon, un send() vers un client deconnecte (CTRL+C)
   // tue le processus au lieu d'echouer simplement (EPIPE), deja gere par
-  // sendAll(). Requis par l'exigence de resilience de l'enonce.
+  // sendAll().
   std::signal(SIGPIPE, SIG_IGN);
 
   if (!_camera.init()) {
@@ -121,10 +121,21 @@ std::optional<int> TcpServer::acceptClient() const {
   }
 
   // Timeout de reception, pour respecter la contrainte des 60 ms
-  timeval timeout{};
-  timeout.tv_sec = 0;
-  timeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
-  setsockopt(clientFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+  timeval recvTimeout{};
+  recvTimeout.tv_sec = 0;
+  recvTimeout.tv_usec = Protocol::RECV_TIMEOUT_MS * 1000;
+  setsockopt(clientFd, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout,
+             sizeof(recvTimeout));
+
+  // Timeout d'envoi : sans cela, un send() vers un lien reseau mort (cable
+  // debranche, sans FIN ni RST) peut bloquer indefiniment si le tampon noyau
+  // se remplit, empechant le serveur de jamais revenir en attente d'un
+  // nouveau client.
+  timeval sendTimeout{};
+  sendTimeout.tv_sec = Protocol::SEND_TIMEOUT_MS / 1000;
+  sendTimeout.tv_usec = (Protocol::SEND_TIMEOUT_MS % 1000) * 1000;
+  setsockopt(clientFd, SOL_SOCKET, SO_SNDTIMEO, &sendTimeout,
+             sizeof(sendTimeout));
 
   // Desactive l'algorithme de Nagle, qui ajouterait des dizaines de ms au
   // cycle de 30 ms en attendant de regrouper les petits messages
@@ -182,11 +193,12 @@ TcpServer::SystemState TcpServer::updateConfirmedState(SystemState instant) {
   return _confirmedState;
 }
 
-void TcpServer::sendFrame(int clientFd) {
+bool TcpServer::sendFrame(int clientFd) {
   // Capture d'une image depuis la camera
   const auto frame = _camera.captureFrame();
   if (!frame) {
-    return;
+    // Echec de capture (camera), pas un probleme de connexion reseau.
+    return true;
   }
 
   const SystemState state =
@@ -195,11 +207,6 @@ void TcpServer::sendFrame(int clientFd) {
   ++_frameId;
   const uint32_t frameIdNet = htonl(_frameId);
 
-  // Un appui est consomme une seule fois par cycle, qu'il soit utilise ou
-  // non : cela garantit qu'un appui survenu pendant un etat NO_LIGHT ou
-  // SENSOR_ERROR ne peut pas s'accumuler et declencher une sauvegarde
-  // tardive une fois l'etat revenu a la normale (ces etats sont
-  // prioritaires sur BUTTON_PRESS, cf. enonce du Livrable 4).
   const bool buttonPressed = _button.consumePressEvent();
 
   if (state != SystemState::Normal) {
@@ -214,18 +221,14 @@ void TcpServer::sendFrame(int clientFd) {
     offset += sizeof(header);
     std::memcpy(headerBuffer.data() + offset, &frameIdNet, sizeof(frameIdNet));
 
-    sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
-    return;
+    return sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
   }
 
-  // Compression JPEG avant transmission (contrainte de l'enonce)
+  // Compression JPEG avant transmission
   std::vector<uchar> jpegBuffer;
   const std::vector<int> jpegParams{cv::IMWRITE_JPEG_QUALITY, JPEG_QUALITY};
   cv::imencode(".jpg", frame.value(), jpegBuffer, jpegParams);
 
-  // Si un appui bouton est en attente, on remplace FRAME_HDR par
-  // BUTTON_PRESS pour cette frame (meme structure de message, seul le
-  // code de commande change).
   const auto messageCode = buttonPressed ? Protocol::MessageCode::ButtonPress
                                          : Protocol::MessageCode::FrameHdr;
   const auto header = static_cast<uint8_t>(messageCode);
@@ -240,8 +243,10 @@ void TcpServer::sendFrame(int clientFd) {
   offset += sizeof(frameIdNet);
   std::memcpy(headerBuffer.data() + offset, &jpegSizeNet, sizeof(jpegSizeNet));
 
-  sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
-  sendAll(clientFd, jpegBuffer.data(), jpegBuffer.size());
+  const bool headerOk =
+      sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
+  const bool dataOk = sendAll(clientFd, jpegBuffer.data(), jpegBuffer.size());
+  return headerOk && dataOk;
 }
 
 bool TcpServer::handleClient(int clientFd) {
@@ -267,7 +272,10 @@ bool TcpServer::handleClient(int clientFd) {
     const auto code = static_cast<Protocol::MessageCode>(message);
 
     if (code == Protocol::MessageCode::GetFrame) {
-      sendFrame(clientFd);
+      if (!sendFrame(clientFd)) {
+        std::cout << "Client deconnecte (echec d'envoi)" << std::endl;
+        return false;
+      }
     } else if (code == Protocol::MessageCode::Stop) {
       const auto response =
           static_cast<uint8_t>(Protocol::MessageCode::StopAck);
