@@ -130,7 +130,7 @@ int main() {
         }
       }
     } else {
-      // affichage CONNEXION PERDUE et la reconnexion a faire ici
+      cv::imshow(WINDOW_NAME, makeWarningFrame("CONNEXION PERDUE"));
     }
 
     // Soustrait le temps deja ecoule (requete + affichage) du delai
