@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/prog",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "Deploy to Odroid and start gdbserver",
+            "targetArchitecture": "arm64",
+            "miDebuggerPath": "/opt/poky/4.0.28/sysroots/x86_64-pokysdk-linux/usr/bin/aarch64-poky-linux/aarch64-poky-linux-gdb",
+            "miDebuggerServerAddress": "192.168.7.2:3000",
+            "setupCommands": [
+                {
+                    "description": "Set sysroot",
+                    "text": "set sysroot /opt/poky/4.0.28/sysroots/cortexa53-poky-linux/"
+                },
+                {
+                    "description": "Ne pas arreter le debogueur sur SIGPIPE",
+                    "text": "handle SIGPIPE nostop noprint pass"
+                }
+            ]
+        }
+    ]
+}

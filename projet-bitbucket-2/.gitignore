@@ -1,0 +1,14 @@
+# Répertoire de compilation
+build/
+
+# Fichiers objets et binaires
+*.o
+*.out
+*.exe
+
+# Documentation générée par Doxygen
+doxygen/
+
+# Fichiers temporaires d'éditeurs
+*.swp
+.DS_Store
