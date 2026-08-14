@@ -1,0 +1,132 @@
+/**
+ * @file TcpClient.h
+ * @brief Client TCP/IP qui dialogue avec le serveur Odroid-C2.
+ */
+#pragma once
+
+#include "Protocol.h"
+
+#include <opencv2/opencv.hpp>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace Client {
+
+/**
+ * @brief Indique la nature de la reponse du serveur a une requete
+ *        GET_FRAME.
+ */
+enum class FrameStatus {
+  Normal,      ///< Reponse FRAME_HDR : image normale.
+  ButtonPress, ///< Reponse BUTTON_PRESS : image liee a un appui bouton.
+  NoLight,     ///< Reponse NO_LIGHT : luminosite insuffisante, pas d'image.
+  SensorError, ///< Reponse SENSOR_ERROR : incoherence capteur/image, pas
+               ///< d'image.
+};
+
+/**
+ * @brief Represente la reponse du serveur a une requete GET_FRAME. L'image
+ *        n'est presente que lorsque status vaut Normal ou ButtonPress.
+ */
+struct Frame {
+  uint32_t frameId; ///< Numero de la frame, attribue par le serveur.
+  cv::Mat image;    ///< Image decodee (BGR), vide si aucune image transmise.
+  FrameStatus status = FrameStatus::Normal; ///< Nature de la reponse recue.
+};
+
+/**
+ * @class TcpClient
+ * @brief Encapsule la connexion TCP/IP et l'echange de messages avec le
+ *        serveur, y compris la reception d'images.
+ */
+class TcpClient {
+public:
+  /// @brief Construit un client non connecte.
+  TcpClient() = default;
+  /// @brief Ferme la connexion si elle est encore active.
+  ~TcpClient();
+
+  /// @brief Non copiable : un TcpClient possede un descripteur de socket
+  /// unique.
+  TcpClient(const TcpClient &) = delete;
+  /// @brief Non copiable : un TcpClient possede un descripteur de socket
+  /// unique.
+  TcpClient &operator=(const TcpClient &) = delete;
+
+  /**
+   * @brief Ouvre la connexion TCP/IP vers le serveur.
+   * @param serverIp Adresse IP du serveur (Odroid-C2).
+   * @return true si la connexion a reussi, false sinon.
+   */
+  bool connectToServer(const std::string &serverIp);
+
+  /**
+   * @brief Tente une seule fois de se (re)connecter au serveur, sans jamais
+   *        bloquer plus de Protocol::RECONNECT_ATTEMPT_TIMEOUT_MS (Livrable 5).
+   *        Contrairement a connectToServer(), un echec est attendu et normal
+   *        ici (le serveur peut simplement ne pas encore etre revenu) : ne
+   *        journalise donc pas d'erreur, l'appelant reessaie plus tard.
+   * @param serverIp Adresse IP du serveur (Odroid-C2).
+   * @return true si la connexion a reussi, false sinon.
+   */
+  bool tryReconnect(const std::string &serverIp);
+
+  /**
+   * @brief Envoie GET_FRAME et recoit la reponse du serveur.
+   *        La reponse peut etre FRAME_HDR ou BUTTON_PRESS (en-tete + JPEG),
+   *        ou NO_LIGHT / SENSOR_ERROR (aucune image transmise), voir
+   *        Frame::status.
+   * @return La frame recue, ou std::nullopt en cas d'erreur.
+   */
+  std::optional<Frame> requestFrame();
+
+  /**
+   * @brief Envoie un message simple d'un octet et attend la reponse
+   *        (utilise pour STOP).
+   * @param message Code de message a envoyer.
+   * @return Le code de reponse recu, ou std::nullopt en cas d'erreur.
+   */
+  std::optional<Protocol::MessageCode>
+  sendAndReceive(Protocol::MessageCode message);
+
+  /**
+   * @brief Demande l'arret du serveur (STOP) et attend STOP_ACK. Retente
+   *        l'envoi plusieurs fois : le serveur, strictement synchrone, peut
+   *        mettre jusqu'a SEND_TIMEOUT_MS (cote serveur) a finir de traiter
+   *        un GET_FRAME en cours avant de lire le STOP, surtout juste apres
+   *        une reconnexion (reseau encore instable). Chaque tentative
+   *        individuelle respecte le timeout de reception standard de
+   *        Protocol::RECV_TIMEOUT_MS (60 ms), conformement a la contrainte
+   *        du Livrable 1 ; c'est le nombre de tentatives qui absorbe
+   *        l'attente totale necessaire, pas un timeout allonge.
+   * @return true si STOP_ACK a ete recu, false si toutes les tentatives ont
+   *         echoue.
+   */
+  bool requestStop();
+
+  /**
+   * @brief Ferme la connexion si elle est active.
+   */
+  void close();
+
+private:
+  /**
+   * @brief Applique le timeout de reception standard (RECV_TIMEOUT_MS) au
+   *        socket connecte courant.
+   */
+  void configureRecvTimeout();
+
+  /**
+   * @brief Recoit exactement 'size' octets, meme si recv() les livre en
+   *        plusieurs morceaux.
+   * @param buffer Destination des donnees recues.
+   * @param size Nombre d'octets attendus.
+   * @return true si tous les octets ont ete recus, false en cas d'erreur.
+   */
+  bool receiveAll(void *buffer, size_t size);
+
+  int _socketFd = -1; ///< Descripteur du socket TCP, -1 si non connecte.
+};
+
+} // namespace Client
