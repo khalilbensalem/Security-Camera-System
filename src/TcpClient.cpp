@@ -147,6 +147,24 @@ TcpClient::sendAndReceive(Protocol::MessageCode message) {
   return static_cast<Protocol::MessageCode>(response);
 }
 
+bool TcpClient::requestStop() {
+  // Le serveur (mono-thread, synchrone) peut mettre jusqu'a ~500ms a finir
+  // le sendAll() d'une frame en cours, potentiellement suivi d'un second
+  // sendAll() dans le meme sendFrame() (jusqu'a ~1000ms) avant de relire le
+  // STOP, puis jusqu'a ~500ms de plus pour que le STOP_ACK reparte si le
+  // reseau est encore degrade : jusqu'a ~1500ms au pire cas. On retente donc
+  // plusieurs fois avec le timeout standard de 60ms par tentative, plutot
+  // que d'allonger ce timeout.
+  constexpr int STOP_MAX_ATTEMPTS = 30; // ~1800ms de budget total au pire cas
+  for (int attempt = 1; attempt <= STOP_MAX_ATTEMPTS; ++attempt) {
+    const auto response = sendAndReceive(Protocol::MessageCode::Stop);
+    if (response && *response == Protocol::MessageCode::StopAck) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::optional<Frame> TcpClient::requestFrame() {
   const auto code = static_cast<uint8_t>(Protocol::MessageCode::GetFrame);
   if (send(_socketFd, &code, sizeof(code), 0) <= 0) {

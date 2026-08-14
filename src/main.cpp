@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <csignal>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -73,6 +74,11 @@ int main() {
   Client::TcpClient client;
   Client::CycleStats stats;
 
+  std::signal(SIGPIPE, SIG_IGN); // symetrique au serveur (TcpServer.cpp:68):
+                                 // evite qu'un send() sur une connexion deja
+                                 // cassee ne tue le processus au lieu de
+                                 // simplement retourner une erreur (EPIPE)
+
   if (!client.connectToServer(SERVER_IP)) {
     return 1;
   }
@@ -82,7 +88,6 @@ int main() {
   cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
 
   ConnectionState connState = ConnectionState::Connected;
-  auto lastFrameSuccessTime = std::chrono::steady_clock::now();
   auto lastReconnectAttempt = std::chrono::steady_clock::now();
 
   bool running = true;
@@ -92,7 +97,6 @@ int main() {
     if (connState == ConnectionState::Connected) {
       const auto frame = client.requestFrame();
       if (frame) {
-        lastFrameSuccessTime = cycleStart;
         switch (frame->status) {
         case Client::FrameStatus::Normal:
         case Client::FrameStatus::ButtonPress:
@@ -119,17 +123,15 @@ int main() {
           break;
         }
       } else {
-        // requestFrame() a echoue (timeout recv, send echoue, etc.) : on
-        // tolere quelques echecs isoles (gigue reseau normale) avant de
-        // declarer la connexion perdue.
-        const auto idleFor = cycleStart - lastFrameSuccessTime;
-        if (idleFor >=
-            std::chrono::milliseconds(Protocol::CONNECTION_LOST_TIMEOUT_MS)) {
-          std::cout << "Connexion perdue" << std::endl;
-          client.close();
-          connState = ConnectionState::Disconnected;
-          lastReconnectAttempt = cycleStart;
-        }
+        // Toute lecture partielle desynchronise le flux TCP (le protocole
+        // n'a pas d'identifiant de requete permettant de "rattraper" une
+        // reponse tardive du serveur) : il faut reconstruire la connexion
+        // immediatement plutot que de retenter sur le meme socket, qui ne
+        // peut que continuer a echouer en cascade.
+        std::cout << "Connexion perdue" << std::endl;
+        client.close();
+        connState = ConnectionState::Disconnected;
+        lastReconnectAttempt = cycleStart;
       }
     } else {
       if (cycleStart - lastReconnectAttempt >=
@@ -137,7 +139,6 @@ int main() {
         lastReconnectAttempt = cycleStart;
         if (client.tryReconnect(SERVER_IP)) {
           connState = ConnectionState::Connected;
-          lastFrameSuccessTime = cycleStart;
         }
       }
       cv::imshow(WINDOW_NAME, makeWarningFrame("CONNEXION PERDUE"));
@@ -155,7 +156,11 @@ int main() {
     const int key = cv::waitKey(remainingMs) & 0xFF;
     if (key == 'q') {
       std::cout << "Arret demande" << std::endl;
-      client.sendAndReceive(Protocol::MessageCode::Stop);
+      if (!client.requestStop()) {
+        std::cerr << "Avertissement : STOP_ACK non recu, le serveur "
+                     "pourrait ne pas s'etre arrete proprement"
+                  << std::endl;
+      }
       running = false;
     }
 

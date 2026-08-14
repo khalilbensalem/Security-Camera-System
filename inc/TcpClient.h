@@ -91,6 +91,21 @@ public:
   sendAndReceive(Protocol::MessageCode message);
 
   /**
+   * @brief Demande l'arret du serveur (STOP) et attend STOP_ACK. Retente
+   *        l'envoi plusieurs fois : le serveur, strictement synchrone, peut
+   *        mettre jusqu'a SEND_TIMEOUT_MS (cote serveur) a finir de traiter
+   *        un GET_FRAME en cours avant de lire le STOP, surtout juste apres
+   *        une reconnexion (reseau encore instable). Chaque tentative
+   *        individuelle respecte le timeout de reception standard de
+   *        Protocol::RECV_TIMEOUT_MS (60 ms), conformement a la contrainte
+   *        du Livrable 1 ; c'est le nombre de tentatives qui absorbe
+   *        l'attente totale necessaire, pas un timeout allonge.
+   * @return true si STOP_ACK a ete recu, false si toutes les tentatives ont
+   *         echoue.
+   */
+  bool requestStop();
+
+  /**
    * @brief Ferme la connexion si elle est active.
    */
   void close();
