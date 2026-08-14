@@ -31,18 +31,6 @@ constexpr int SEND_TIMEOUT_MS = 500;
 /// reprise en moins de 10 s du Livrable 5.
 constexpr std::chrono::milliseconds CLIENT_IDLE_TIMEOUT{1000};
 
-/// Delai maximal tolere cote client pour la reception du STOP_ACK, en
-/// reponse a un STOP. Deliberement plus genereux que RECV_TIMEOUT_MS
-/// (60 ms, dimensionne pour le cycle GET_FRAME de 30 ms) : avant de pouvoir
-/// lire et repondre au STOP, le serveur doit d'abord terminer tout
-/// traitement GET_FRAME deja en cours (capture, lecture capteur, encodage
-/// JPEG, puis sendAll() de la reponse), ce dernier pouvant legitimement
-/// durer jusqu'a SEND_TIMEOUT_MS (500 ms) si le lien est encore instable
-/// juste apres une reconnexion. Un timeout de 60 ms pour STOP_ACK n'offre
-/// donc quasiment aucune marge et provoque un abandon intermittent du cote
-/// client alors que le serveur traite bel et bien le STOP, juste trop tard.
-constexpr int STOP_TIMEOUT_MS = 1500;
-
 /// Duree minimale pendant laquelle un nouvel etat (NO_LIGHT, SENSOR_ERROR,
 /// FRAME_HDR) doit persister sans interruption avant d'etre transmis au
 /// client ; evite les oscillations rapides autour d'un seuil de luminosite.
