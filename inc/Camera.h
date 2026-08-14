@@ -56,8 +56,17 @@ public:
   std::optional<cv::Mat> captureFrame();
 
 private:
+  /**
+   * @brief Recherche et ouvre le noeud /dev/videoN correspondant a la
+   *        camera USB, en verifiant qu'il produit reellement une image
+   *        (et pas seulement qu'il s'ouvre).
+   * @return true si un noeud fonctionnel a ete trouve et ouvert.
+   */
+  bool openCamera();
+
   /// Boucle executee sur le thread dedie : capture des images en continu et
-  /// met _latestFrame a jour (protege par _frameMutex).
+  /// met _latestFrame a jour (protege par _frameMutex). Tente de rouvrir la
+  /// camera (voir openCamera()) si les lectures echouent de facon soutenue.
   void captureLoop();
 
   cv::VideoCapture

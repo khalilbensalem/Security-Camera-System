@@ -219,8 +219,6 @@ TcpServer::SystemState TcpServer::updateConfirmedState(SystemState instant) {
 bool TcpServer::sendFrame(int clientFd) {
   // Capture d'une image depuis la camera
   const auto frame = _camera.captureFrame();
-  ++_frameId;
-  const uint32_t frameIdNet = htonl(_frameId);
 
   if (!frame) {
     // Echec de capture (camera), frequent en tres faible luminosite : aucune
@@ -231,27 +229,41 @@ bool TcpServer::sendFrame(int clientFd) {
     // lumiere, l'echec de capture est une veritable anomalie (SENSOR_ERROR).
     // Dans les deux cas, le client attend une reponse a chaque GET_FRAME
     // (timeout 60 ms) : ne rien envoyer ferait croire, a tort, a une perte
-    // de connexion.
+    // de connexion. frame_id n'est pas incremente : aucune image n'est
+    // transmise, il reste celui de la derniere image reellement envoyee.
+    // Un appui sur le bouton est neanmoins consomme (jamais reporte), pour
+    // ne pas declencher de sauvegarde tardive au retour a l'etat normal.
+    _button.consumePressEvent();
     const SystemState state = updateConfirmedState(
         _lightSensor.isDark() ? SystemState::NoLight
                               : SystemState::SensorError);
     const auto messageCode = state == SystemState::NoLight
                                  ? Protocol::MessageCode::NoLight
                                  : Protocol::MessageCode::SensorError;
-    return sendHeaderOnly(clientFd, messageCode, frameIdNet);
+    return sendHeaderOnly(clientFd, messageCode, htonl(_frameId));
   }
 
   const SystemState state =
       updateConfirmedState(computeInstantState(frame.value()));
 
-  const bool buttonPressed = _button.consumePressEvent();
-
   if (state != SystemState::Normal) {
+    // Meme logique que ci-dessus : pas d'image transmise, frame_id ne
+    // progresse pas, et l'appui sur le bouton est consomme sans etre
+    // reporte (priorite de NO_LIGHT/SENSOR_ERROR sur BUTTON_PRESS, voir
+    // Livrable 4).
+    _button.consumePressEvent();
     const auto messageCode = state == SystemState::NoLight
                                  ? Protocol::MessageCode::NoLight
                                  : Protocol::MessageCode::SensorError;
-    return sendHeaderOnly(clientFd, messageCode, frameIdNet);
+    return sendHeaderOnly(clientFd, messageCode, htonl(_frameId));
   }
+
+  const bool buttonPressed = _button.consumePressEvent();
+
+  // Une image est reellement transmise a partir d'ici : c'est le seul
+  // endroit ou frame_id avance.
+  ++_frameId;
+  const uint32_t frameIdNet = htonl(_frameId);
 
   // Compression JPEG avant transmission
   std::vector<uchar> jpegBuffer;

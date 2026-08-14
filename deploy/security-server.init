@@ -1,0 +1,78 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          security-server
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     5
+# Default-Stop:      0 1 6
+# Short-Description: Serveur de surveillance (camera USB, GPIO, capteur de
+#                     luminosite) du projet ELE4205.
+### END INIT INFO
+#
+# Script SysVinit (la cible n'a pas systemd) demarrant le serveur "prog" au
+# demarrage de l'Odroid-C2, dans /etc/rc5.d (runlevel par defaut de la
+# cible, voir /etc/inittab). "prog" ne se demonise pas lui-meme (il bloque
+# en avant-plan sur sa boucle reseau) : ce script le lance en arriere-plan
+# avec nohup et suit son PID manuellement, plutot que de dependre des
+# options de start-stop-daemon (busybox) dont le support n'est pas garanti
+# sur cette image minimale.
+
+NAME=security-server
+PROGRAM_DIR=/home/root
+PROGRAM=${PROGRAM_DIR}/prog
+PIDFILE=/var/run/${NAME}.pid
+LOGFILE=/var/log/${NAME}.log
+
+is_running() {
+  [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+  if is_running; then
+    echo "${NAME} deja demarre (pid $(cat "$PIDFILE"))."
+    return 0
+  fi
+  if [ ! -x "$PROGRAM" ]; then
+    echo "${NAME} : $PROGRAM introuvable ou non executable, abandon."
+    return 1
+  fi
+  echo "Demarrage de ${NAME}."
+  cd "$PROGRAM_DIR" || return 1
+  nohup "$PROGRAM" >>"$LOGFILE" 2>&1 &
+  echo $! >"$PIDFILE"
+}
+
+stop() {
+  if is_running; then
+    echo "Arret de ${NAME}."
+    kill "$(cat "$PIDFILE")" 2>/dev/null
+  fi
+  rm -f "$PIDFILE"
+}
+
+case "$1" in
+start)
+  start
+  ;;
+stop)
+  stop
+  ;;
+restart)
+  stop
+  sleep 1
+  start
+  ;;
+status)
+  if is_running; then
+    echo "${NAME} en cours d'execution (pid $(cat "$PIDFILE"))."
+  else
+    echo "${NAME} arrete."
+  fi
+  ;;
+*)
+  echo "Usage: $0 {start|stop|restart|status}"
+  exit 1
+  ;;
+esac
+
+exit 0
