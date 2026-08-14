@@ -11,7 +11,9 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -90,6 +92,12 @@ int main() {
   ConnectionState connState = ConnectionState::Connected;
   auto lastReconnectAttempt = std::chrono::steady_clock::now();
 
+  // Suivi du temps ecoule dans l'etat d'erreur courant (NO_LIGHT /
+  // SENSOR_ERROR), remis a zero des que l'etat change (Livrable 4, bonus
+  // "temps ecoule").
+  Client::FrameStatus lastStatus = Client::FrameStatus::Normal;
+  std::chrono::steady_clock::time_point errorStateStart{};
+
   bool running = true;
   while (running) {
     const auto cycleStart = std::chrono::steady_clock::now();
@@ -115,13 +123,24 @@ int main() {
           break;
 
         case Client::FrameStatus::NoLight:
-          cv::imshow(WINDOW_NAME, makeWarningFrame("Lumiere insuffisante"));
-          break;
-
-        case Client::FrameStatus::SensorError:
-          cv::imshow(WINDOW_NAME, makeWarningFrame("Capteur errone"));
+        case Client::FrameStatus::SensorError: {
+          if (frame->status != lastStatus) {
+            errorStateStart = cycleStart;
+          }
+          const double elapsedSec =
+              std::chrono::duration<double>(cycleStart - errorStateStart)
+                  .count();
+          std::ostringstream label;
+          label << (frame->status == Client::FrameStatus::NoLight
+                         ? "Lumiere insuffisante"
+                         : "Capteur errone")
+                << " (t = " << std::fixed << std::setprecision(1)
+                << elapsedSec << " s)";
+          cv::imshow(WINDOW_NAME, makeWarningFrame(label.str()));
           break;
         }
+        }
+        lastStatus = frame->status;
       } else {
         // Toute lecture partielle desynchronise le flux TCP (le protocole
         // n'a pas d'identifiant de requete permettant de "rattraper" une
