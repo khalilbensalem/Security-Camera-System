@@ -60,6 +60,13 @@ private:
 
 namespace Server {
 
+Camera::~Camera() {
+  _running = false;
+  if (_captureThread.joinable()) {
+    _captureThread.join();
+  }
+}
+
 bool Camera::init() {
   // Backend V4L2 explicite (le backend par defaut tentait GStreamer sans
   // succes)
@@ -82,25 +89,36 @@ bool Camera::init() {
   _videoCapture.set(cv::CAP_PROP_FPS, FRAME_FPS);
 
   std::cout << "Camera ouverte avec succes" << std::endl;
+
+  _running = true;
+  _captureThread = std::thread(&Camera::captureLoop, this);
   return true;
 }
 
-std::optional<cv::Mat> Camera::captureFrame() {
-  cv::Mat frame;
-  bool readOk = false;
+void Camera::captureLoop() {
+  while (_running) {
+    cv::Mat frame;
+    bool readOk = false;
 
-  {
-    // Scope limite a read() : le message d'erreur ci-dessous reste visible
-    ScopedStderrSuppressor suppressStderr;
-    readOk = _videoCapture.read(frame);
+    {
+      // Scope limite a read() : le message d'erreur ci-dessous reste visible
+      ScopedStderrSuppressor suppressStderr;
+      readOk = _videoCapture.read(frame);
+    }
+
+    if (readOk && !frame.empty()) {
+      std::lock_guard<std::mutex> lock(_frameMutex);
+      _latestFrame = frame;
+    }
   }
+}
 
-  if (!readOk || frame.empty()) {
-    std::cerr << "Erreur : capture d'image echouee" << std::endl;
+std::optional<cv::Mat> Camera::captureFrame() {
+  std::lock_guard<std::mutex> lock(_frameMutex);
+  if (_latestFrame.empty()) {
     return std::nullopt;
   }
-
-  return frame;
+  return _latestFrame.clone();
 }
 
 } // namespace Server

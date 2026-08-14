@@ -51,6 +51,26 @@ bool sendAll(int fd, const void *data, size_t size) {
   return true;
 }
 
+/**
+ * @brief Envoie une reponse ne contenant que l'en-tete (code + frame_id),
+ *        sans image : utilise pour NO_LIGHT, SENSOR_ERROR, et pour signaler
+ *        un echec de capture camera (aucun code dedie n'existe pour ce
+ *        dernier cas dans le protocole, SENSOR_ERROR est le plus proche).
+ * @param fd Descripteur du socket cible.
+ * @param code Code de message a transmettre.
+ * @param frameIdNet Numero de frame, deja converti en ordre reseau.
+ * @return true si l'en-tete a ete envoye avec succes, false sinon.
+ */
+bool sendHeaderOnly(int fd, Protocol::MessageCode code, uint32_t frameIdNet) {
+  const auto header = static_cast<uint8_t>(code);
+  std::array<uint8_t, sizeof(header) + sizeof(frameIdNet)> headerBuffer{};
+  size_t offset = 0;
+  std::memcpy(headerBuffer.data() + offset, &header, sizeof(header));
+  offset += sizeof(header);
+  std::memcpy(headerBuffer.data() + offset, &frameIdNet, sizeof(frameIdNet));
+  return sendAll(fd, headerBuffer.data(), headerBuffer.size());
+}
+
 } // namespace
 
 namespace Server {
@@ -199,16 +219,30 @@ TcpServer::SystemState TcpServer::updateConfirmedState(SystemState instant) {
 bool TcpServer::sendFrame(int clientFd) {
   // Capture d'une image depuis la camera
   const auto frame = _camera.captureFrame();
+  ++_frameId;
+  const uint32_t frameIdNet = htonl(_frameId);
+
   if (!frame) {
-    // Echec de capture (camera), pas un probleme de connexion reseau.
-    return true;
+    // Echec de capture (camera), frequent en tres faible luminosite : aucune
+    // image n'est disponible pour la comparer a la photoresistance, mais
+    // celle-ci reste exploitable seule. Une camera qui ne capture plus rien
+    // alors que le capteur indique l'obscurite est coherent avec une scene
+    // trop sombre (NO_LIGHT) ; si le capteur indique au contraire de la
+    // lumiere, l'echec de capture est une veritable anomalie (SENSOR_ERROR).
+    // Dans les deux cas, le client attend une reponse a chaque GET_FRAME
+    // (timeout 60 ms) : ne rien envoyer ferait croire, a tort, a une perte
+    // de connexion.
+    const SystemState state = updateConfirmedState(
+        _lightSensor.isDark() ? SystemState::NoLight
+                              : SystemState::SensorError);
+    const auto messageCode = state == SystemState::NoLight
+                                 ? Protocol::MessageCode::NoLight
+                                 : Protocol::MessageCode::SensorError;
+    return sendHeaderOnly(clientFd, messageCode, frameIdNet);
   }
 
   const SystemState state =
       updateConfirmedState(computeInstantState(frame.value()));
-
-  ++_frameId;
-  const uint32_t frameIdNet = htonl(_frameId);
 
   const bool buttonPressed = _button.consumePressEvent();
 
@@ -216,15 +250,7 @@ bool TcpServer::sendFrame(int clientFd) {
     const auto messageCode = state == SystemState::NoLight
                                  ? Protocol::MessageCode::NoLight
                                  : Protocol::MessageCode::SensorError;
-    const auto header = static_cast<uint8_t>(messageCode);
-
-    std::array<uint8_t, sizeof(header) + sizeof(frameIdNet)> headerBuffer{};
-    size_t offset = 0;
-    std::memcpy(headerBuffer.data() + offset, &header, sizeof(header));
-    offset += sizeof(header);
-    std::memcpy(headerBuffer.data() + offset, &frameIdNet, sizeof(frameIdNet));
-
-    return sendAll(clientFd, headerBuffer.data(), headerBuffer.size());
+    return sendHeaderOnly(clientFd, messageCode, frameIdNet);
   }
 
   // Compression JPEG avant transmission
@@ -295,7 +321,17 @@ bool TcpServer::handleClient(int clientFd) {
     } else if (code == Protocol::MessageCode::Stop) {
       const auto response =
           static_cast<uint8_t>(Protocol::MessageCode::StopAck);
-      send(clientFd, &response, sizeof(response), 0);
+      if (!sendAll(clientFd, &response, sizeof(response))) {
+        std::cerr << "Erreur : echec d'envoi de STOP_ACK" << std::endl;
+      }
+      // Vide les octets encore en attente (ex : STOP renvoyes par le client
+      // pendant ses propres tentatives) avant de fermer : sinon, le noyau
+      // envoie un RST au lieu d'un FIN propre des qu'un close() intervient
+      // alors que des donnees non lues restent dans le tampon de reception,
+      // ce qui peut faire echouer le client sur un send() ulterieur.
+      uint8_t discard = 0;
+      while (recv(clientFd, &discard, sizeof(discard), MSG_DONTWAIT) > 0) {
+      }
       std::cout << "Arret demande" << std::endl;
       return true;
     }
